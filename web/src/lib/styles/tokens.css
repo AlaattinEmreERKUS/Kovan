@@ -1,0 +1,57 @@
+:root {
+  --zemin-0: #0B0A09;
+  --zemin-1: #131110;
+  --zemin-2: #1B1917;
+  --cizgi: rgba(255, 255, 255, 0.07);
+
+  --metin-1: #EDE9E3;
+  --metin-2: #A19B92;
+  --metin-3: #6E6862;
+
+  --bal: #E8A33D;
+  --bal-sicak: #FFC46B;
+  --bal-zemin: rgba(232, 163, 61, 0.12);
+
+  --tehlike: #D9584A;
+  --online: #4FA96B;
+
+  --radius: 6px;
+  --gecis: 140ms ease;
+
+  --yazi: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --yazi-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--zemin-0);
+  color: var(--metin-1);
+  font-family: var(--yazi);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--radius);
+}
+
+:focus-visible {
+  outline: 2px solid var(--bal);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
