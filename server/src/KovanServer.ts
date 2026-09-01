@@ -101,6 +101,10 @@ export class KovanServer implements DurableObject {
     switch ((event as ClientEvent).t) {
       case "msg.send":
         return this.handleSend(ws, state, event as Extract<ClientEvent, { t: "msg.send" }>);
+      case "typing":
+        // Sunucuda throttle YOK; kota korumasi istemcide (Task 12).
+        broadcast(this.ctx, { t: "typing", userId: state.userId }, ws);
+        return;
       case "reaction.toggle": {
         const ham = event as { messageId?: unknown; emoji?: unknown };
         // Emoji ham haliyle SQL'e verilirse (nesne, sayi) bind hatasi firlar
