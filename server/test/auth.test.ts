@@ -23,6 +23,19 @@ describe("auth", () => {
     expect(timingSafeEqual(dogru, yanlis)).toBe(false);
   });
 
+  it("ayni parola ve salt timingSafeEqual ile eslesir", async () => {
+    const salt = newSalt();
+    const a = await hashPassword("kovan123", salt);
+    const b = await hashPassword("kovan123", salt);
+    expect(timingSafeEqual(a, b)).toBe(true);
+  });
+
+  it("bilinen cevap vektoru: parametreler degisirse kirilir", async () => {
+    const salt = "00112233445566778899aabbccddeeff";
+    const beklenen = "4c2aec25c173bc98c125edba1ace912702da988d768e933c8f1296ed0703428a";
+    expect(await hashPassword("kovan123", salt)).toBe(beklenen);
+  });
+
   it("session token 64 hex ve her cagrida farkli", () => {
     const a = newSessionToken();
     const b = newSessionToken();
