@@ -103,6 +103,26 @@ describe("kayit ve giris", () => {
     expect(res.status).toBe(400);
   });
 
+  it("nesne olmayan ama gecerli json govde 400 doner", async () => {
+    // "null" gecerli JSON'dur; destructure edilirse istek yanitsiz duser.
+    for (const ham of ["null", '"metin"', "42", "[]"]) {
+      expect((await postRaw("/api/register", ham)).status, ham).toBe(400);
+      expect((await postRaw("/api/login", ham)).status, ham).toBe(400);
+    }
+  });
+
+  it("asiri uzun kullanici adi ve gorunen ad 400 doner", async () => {
+    await seedInvite("A1");
+    const uzunKullanici = await post("/api/register", {
+      code: "A1", username: "a".repeat(33), displayName: "N", password: "kovan123",
+    });
+    expect(uzunKullanici.status).toBe(400);
+    const uzunAd = await post("/api/register", {
+      code: "A1", username: "napol", displayName: "b".repeat(65), password: "kovan123",
+    });
+    expect(uzunAd.status).toBe(400);
+  });
+
   it("string olmayan alan 400 doner", async () => {
     await seedInvite("A1");
     const res = await post("/api/register", {

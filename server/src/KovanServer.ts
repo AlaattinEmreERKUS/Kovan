@@ -30,11 +30,23 @@ export class KovanServer implements DurableObject {
     return new Response("not found", { status: 404 });
   }
 
-  private async register(request: Request): Promise<Response> {
-    let body: { code: unknown; username: unknown; displayName: unknown; password: unknown };
+  /**
+   * Govdeyi nesne olarak okur. "null" gecerli JSON'dur ama nesne degildir;
+   * dogrudan destructure edilirse TypeError firlatir ve istek yanitsiz duser.
+   */
+  private static async readObject(request: Request): Promise<Record<string, unknown> | null> {
     try {
-      body = await request.json();
+      const parsed = await request.json();
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return null;
+      return parsed as Record<string, unknown>;
     } catch {
+      return null;
+    }
+  }
+
+  private async register(request: Request): Promise<Response> {
+    const body = await KovanServer.readObject(request);
+    if (!body) {
       return Response.json({ code: "bozuk_govde", message: "Geçersiz istek gövdesi." }, { status: 400 });
     }
     const { code, username, displayName, password } = body;
@@ -51,6 +63,12 @@ export class KovanServer implements DurableObject {
     }
     if (password.length > 256) {
       return Response.json({ code: "uzun_parola", message: "Parola en fazla 256 karakter olabilir." }, { status: 400 });
+    }
+    if (username.length > 32) {
+      return Response.json({ code: "uzun_kullanici_adi", message: "Kullanıcı adı en fazla 32 karakter olabilir." }, { status: 400 });
+    }
+    if (displayName.length > 64) {
+      return Response.json({ code: "uzun_ad", message: "Görünen ad en fazla 64 karakter olabilir." }, { status: 400 });
     }
 
     // Parolayı EN BAŞTA, herhangi bir DB kontrolünden önce hashle. PBKDF2 (hashPassword)
@@ -97,10 +115,8 @@ export class KovanServer implements DurableObject {
   }
 
   private async login(request: Request): Promise<Response> {
-    let body: { username: unknown; password: unknown };
-    try {
-      body = await request.json();
-    } catch {
+    const body = await KovanServer.readObject(request);
+    if (!body) {
       return Response.json({ code: "bozuk_govde", message: "Geçersiz istek gövdesi." }, { status: 400 });
     }
     const username = typeof body.username === "string" ? body.username : "";
