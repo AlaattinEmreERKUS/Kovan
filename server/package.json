@@ -4,7 +4,7 @@
   "description": "",
   "scripts": {
     "test": "vitest run",
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --var KOVAN_DEV:1",
     "deploy": "wrangler deploy"
   },
   "keywords": [],

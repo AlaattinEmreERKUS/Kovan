@@ -1,4 +1,5 @@
 import { ensureSchema } from "./schema";
+import type { Env } from "./worker";
 import { hashPassword, hashToken, newSalt, newSessionToken, timingSafeEqual } from "./auth";
 import { type SocketState, broadcast, onlineUserIds, readState, socketsOf, writeState } from "./sockets";
 import {
@@ -18,7 +19,7 @@ interface UserRow extends Record<string, SqlStorageValue> {
 export class KovanServer implements DurableObject {
   private sql: SqlStorage;
 
-  constructor(private ctx: DurableObjectState, private env: unknown) {
+  constructor(private ctx: DurableObjectState, private env: Env) {
     this.sql = ctx.storage.sql;
     ensureSchema(this.sql);
   }
@@ -31,6 +32,15 @@ export class KovanServer implements DurableObject {
     }
     if (request.method === "POST" && url.pathname === "/api/login") {
       return this.login(request);
+    }
+    // Yalnizca yerel gelistirmede: KOVAN_DEV bayragi wrangler dev --var ile
+    // geliyor, deploy'da tanimsiz.
+    if (request.method === "POST" && url.pathname === "/api/dev/invite" && this.env.KOVAN_DEV === "1") {
+      const body = await KovanServer.readObject(request);
+      const code = typeof body?.code === "string" ? body.code : "";
+      if (!code) return Response.json({ ok: false }, { status: 400 });
+      this.sql.exec("INSERT OR IGNORE INTO invites (code) VALUES (?)", code);
+      return Response.json({ ok: true });
     }
     if (url.pathname === "/ws") {
       return this.openSocket(url);
