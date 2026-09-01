@@ -1,0 +1,57 @@
+import type { ServerEvent } from "@shared/protocol";
+
+export interface SocketState {
+  userId: string;
+  username: string;
+  displayName: string;
+  inVoice: boolean;
+  muted: boolean;
+  deafened: boolean;
+  camera: boolean;
+  screen: boolean;
+  /** Ekranla birlikte sistem sesi de gidiyor mu (spec 8.1). */
+  screenAudio: boolean;
+}
+
+export function readState(ws: WebSocket): SocketState {
+  return ws.deserializeAttachment() as SocketState;
+}
+
+export function writeState(ws: WebSocket, patch: Partial<SocketState>): SocketState {
+  const next = { ...readState(ws), ...patch };
+  ws.serializeAttachment(next);
+  return next;
+}
+
+/**
+ * Online kullanıcılar DAİMA açık socket'lerden türetilir.
+ * Instance alanında cache tutmak hibernation sonrası state kaybına yol açar.
+ */
+export function onlineUserIds(ctx: DurableObjectState): string[] {
+  return [...new Set(ctx.getWebSockets().map((ws) => readState(ws).userId))];
+}
+
+export function socketsOf(ctx: DurableObjectState, userId: string): WebSocket[] {
+  return ctx.getWebSockets().filter((ws) => readState(ws).userId === userId);
+}
+
+export function broadcast(ctx: DurableObjectState, event: ServerEvent, exclude?: WebSocket): void {
+  const payload = JSON.stringify(event);
+  for (const ws of ctx.getWebSockets()) {
+    if (ws === exclude) continue;
+    try {
+      ws.send(payload);
+    } catch {
+      // Kapanmış socket. getWebSockets() bir sonraki turda temizler.
+    }
+  }
+}
+
+export function sendTo(ctx: DurableObjectState, userId: string, event: ServerEvent): void {
+  const payload = JSON.stringify(event);
+  for (const ws of socketsOf(ctx, userId)) {
+    try {
+      ws.send(payload);
+    } catch { /* yukarıdaki gerekçe */ }
+  }
+}

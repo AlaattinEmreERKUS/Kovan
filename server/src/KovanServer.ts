@@ -1,6 +1,8 @@
 import { ensureSchema } from "./schema";
 import { hashPassword, hashToken, newSalt, newSessionToken, timingSafeEqual } from "./auth";
-import type { User } from "@shared/protocol";
+import { broadcast, onlineUserIds, readState, socketsOf, writeState } from "./sockets";
+import { recentMessages, reactionsFor } from "./messages";
+import type { ServerEvent, User } from "@shared/protocol";
 
 interface UserRow extends Record<string, SqlStorageValue> {
   id: string;
@@ -27,7 +29,62 @@ export class KovanServer implements DurableObject {
     if (request.method === "POST" && url.pathname === "/api/login") {
       return this.login(request);
     }
+    if (url.pathname === "/ws") {
+      return this.openSocket(url);
+    }
     return new Response("not found", { status: 404 });
+  }
+
+  private async openSocket(url: URL): Promise<Response> {
+    const user = await this.authenticate(url.searchParams.get("token") ?? "");
+    if (!user) {
+      return new Response("unauthorized", { status: 401 });
+    }
+
+    const { 0: client, 1: server } = new WebSocketPair();
+    this.ctx.acceptWebSocket(server);
+
+    writeState(server, {
+      userId: user.id,
+      username: user.username,
+      displayName: user.displayName,
+      inVoice: false,
+      muted: false,
+      deafened: false,
+      camera: false,
+      screen: false,
+      screenAudio: false,
+    });
+
+    const gecmis = recentMessages(this.sql);
+    server.send(JSON.stringify({
+      t: "hello",
+      me: user,
+      members: this.allUsers(),
+      recentMessages: gecmis,
+      reactions: reactionsFor(this.sql, gecmis.map((m) => m.id)),
+      online: onlineUserIds(this.ctx),
+    } satisfies ServerEvent));
+
+    broadcast(this.ctx, { t: "presence.update", userId: user.id, online: true }, server);
+
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  private allUsers(): User[] {
+    return this.sql
+      .exec<{ id: string; username: string; display_name: string }>(
+        "SELECT id, username, display_name FROM users ORDER BY created_at")
+      .toArray()
+      .map((r) => ({ id: r.id, username: r.username, displayName: r.display_name }));
+  }
+
+  async webSocketClose(ws: WebSocket): Promise<void> {
+    const { userId } = readState(ws);
+    // Bu kullanıcının başka açık socket'i yoksa offline sayılır.
+    if (socketsOf(this.ctx, userId).filter((s) => s !== ws).length === 0) {
+      broadcast(this.ctx, { t: "presence.update", userId, online: false }, ws);
+    }
   }
 
   /**
