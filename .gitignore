@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.svelte-kit/
+.wrangler/
+target/
+.env
+.env.*
+!.env.example
+.superpowers/
+test-results/
+playwright-report/
