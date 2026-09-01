@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kovan S0 Spike</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Kovan S0 spike</h1>
+
+      <section class="card">
+        <h2>R1 — WebView2 ekran paylaşımı</h2>
+        <p class="hint">
+          Düğmeye bas. Beklenen: WebView2 kaynak seçici açılır, seçtikten sonra
+          aşağıdaki kutuda görüntü akar.
+        </p>
+        <label class="check">
+          <input type="checkbox" id="with-audio" checked />
+          Sistem sesini de paylaş (<code>audio:true</code> + <code>systemAudio:"include"</code>)
+        </label>
+        <div class="row">
+          <button id="share">Ekran paylaş</button>
+          <button id="camera">Kamera aç</button>
+          <button id="stop" disabled>Durdur</button>
+        </div>
+        <div id="r1-verdict" class="verdict">R1: ölçülmedi</div>
+        <div id="r3-verdict" class="verdict">Ses: ölçülmedi</div>
+        <div class="meter"><span id="level"></span></div>
+        <video id="preview" autoplay playsinline muted></video>
+      </section>
+
+      <section class="card">
+        <h2>R2 — Global kısayol keyup (F8)</h2>
+        <p class="hint">
+          Bu pencereyi ARKA PLANA al (başka pencereye tıkla), F8'e bas ve bırak.
+          Beklenen: aşağıda hem <code>Pressed</code> hem <code>Released</code>.
+        </p>
+        <div class="row counters">
+          <span>Pressed: <b id="c-press">0</b></span>
+          <span>Released: <b id="c-release">0</b></span>
+        </div>
+        <div id="r2-verdict" class="verdict">R2: ölçülmedi</div>
+      </section>
+
+      <section class="card">
+        <h2>Log</h2>
+        <pre id="log"></pre>
+      </section>
+    </main>
+    <script type="module" src="main.js"></script>
+  </body>
+</html>
