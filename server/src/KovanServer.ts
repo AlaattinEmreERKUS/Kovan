@@ -1,7 +1,7 @@
 import { ensureSchema } from "./schema";
 import { hashPassword, hashToken, newSalt, newSessionToken, timingSafeEqual } from "./auth";
 import { type SocketState, broadcast, onlineUserIds, readState, socketsOf, writeState } from "./sockets";
-import { MAX_CONTENT, insertMessage, reactionsFor, recentMessages } from "./messages";
+import { MAX_CONTENT, insertMessage, messagesAfter, reactionsFor, recentMessages } from "./messages";
 import type { ClientEvent, ServerEvent, User } from "@shared/protocol";
 
 interface UserRow extends Record<string, SqlStorageValue> {
@@ -98,6 +98,16 @@ export class KovanServer implements DurableObject {
     switch ((event as ClientEvent).t) {
       case "msg.send":
         return this.handleSend(ws, state, event as Extract<ClientEvent, { t: "msg.send" }>);
+      case "sync": {
+        // Sayi olmayan / ondalikli / negatif deger bastan senkron sayilir.
+        // Ham deger SQL'e verilirse SQLite tur onceligi yuzunden sessizce
+        // bos sonuc doner ve istemci gecmisi kayip saniyor.
+        const ham = (event as { lastMessageId?: unknown }).lastMessageId;
+        const lastId = typeof ham === "number" && Number.isInteger(ham) && ham > 0 ? ham : 0;
+        const messages = messagesAfter(this.sql, lastId);
+        ws.send(JSON.stringify({ t: "sync.result", messages } satisfies ServerEvent));
+        return;
+      }
       default:
         return this.fail(ws, "bilinmeyen_olay", `Tanınmayan olay: ${(event as { t: string }).t}`);
     }

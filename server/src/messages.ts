@@ -45,3 +45,15 @@ export function insertMessage(sql: SqlStorage, authorId: string, content: string
     .toArray()[0];
   return { id: row.id, authorId, content, createdAt };
 }
+
+const SYNC_LIMIT = 200;
+
+export function messagesAfter(sql: SqlStorage, lastId: number): Message[] {
+  return sql
+    .exec<{ id: number; author_id: string; content: string; created_at: number }>(
+      "SELECT id, author_id, content, created_at FROM messages WHERE id > ? ORDER BY id LIMIT ?",
+      lastId, SYNC_LIMIT
+    )
+    .toArray()
+    .map((r) => ({ id: r.id, authorId: r.author_id, content: r.content, createdAt: r.created_at }));
+}
