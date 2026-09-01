@@ -57,3 +57,34 @@ export function messagesAfter(sql: SqlStorage, lastId: number): Message[] {
     .toArray()
     .map((r) => ({ id: r.id, authorId: r.author_id, content: r.content, createdAt: r.created_at }));
 }
+
+/** Emoji dizisi ZWJ ve ton degistiricilerle uzayabilir; 32 kod birimi bol tavan. */
+export const MAX_EMOJI = 32;
+
+export function messageExists(sql: SqlStorage, messageId: number): boolean {
+  return sql.exec("SELECT 1 FROM messages WHERE id = ?", messageId).toArray().length > 0;
+}
+
+export function toggleReaction(
+  sql: SqlStorage, messageId: number, userId: string, emoji: string
+): string[] {
+  const var_mi = sql
+    .exec("SELECT 1 FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?",
+      messageId, userId, emoji)
+    .toArray().length > 0;
+
+  if (var_mi) {
+    sql.exec("DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?",
+      messageId, userId, emoji);
+  } else {
+    sql.exec("INSERT INTO reactions (message_id, user_id, emoji) VALUES (?, ?, ?)",
+      messageId, userId, emoji);
+  }
+
+  return sql
+    .exec<{ user_id: string }>(
+      "SELECT user_id FROM reactions WHERE message_id = ? AND emoji = ? ORDER BY rowid",
+      messageId, emoji)
+    .toArray()
+    .map((r) => r.user_id);
+}

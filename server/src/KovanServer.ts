@@ -1,7 +1,10 @@
 import { ensureSchema } from "./schema";
 import { hashPassword, hashToken, newSalt, newSessionToken, timingSafeEqual } from "./auth";
 import { type SocketState, broadcast, onlineUserIds, readState, socketsOf, writeState } from "./sockets";
-import { MAX_CONTENT, insertMessage, messagesAfter, reactionsFor, recentMessages } from "./messages";
+import {
+  MAX_CONTENT, MAX_EMOJI, insertMessage, messageExists, messagesAfter,
+  reactionsFor, recentMessages, toggleReaction,
+} from "./messages";
 import type { ClientEvent, ServerEvent, User } from "@shared/protocol";
 
 interface UserRow extends Record<string, SqlStorageValue> {
@@ -98,6 +101,24 @@ export class KovanServer implements DurableObject {
     switch ((event as ClientEvent).t) {
       case "msg.send":
         return this.handleSend(ws, state, event as Extract<ClientEvent, { t: "msg.send" }>);
+      case "reaction.toggle": {
+        const ham = event as { messageId?: unknown; emoji?: unknown };
+        // Emoji ham haliyle SQL'e verilirse (nesne, sayi) bind hatasi firlar
+        // ve handler icindeki hata socket'i sessizce oldurur.
+        if (typeof ham.emoji !== "string" || ham.emoji.length === 0 || ham.emoji.length > MAX_EMOJI) {
+          return this.fail(ws, "gecersiz_emoji", "Geçersiz emoji.");
+        }
+        const messageId = typeof ham.messageId === "number" && Number.isInteger(ham.messageId)
+          ? ham.messageId : -1;
+        if (!messageExists(this.sql, messageId)) {
+          return this.fail(ws, "mesaj_yok", "Mesaj bulunamadı.");
+        }
+        const userIds = toggleReaction(this.sql, messageId, state.userId, ham.emoji);
+        broadcast(this.ctx, {
+          t: "reaction.update", messageId, emoji: ham.emoji, userIds,
+        });
+        return;
+      }
       case "sync": {
         // Sayi olmayan / ondalikli / negatif deger bastan senkron sayilir.
         // Ham deger SQL'e verilirse SQLite tur onceligi yuzunden sessizce
