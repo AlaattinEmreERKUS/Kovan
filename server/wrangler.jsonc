@@ -1,0 +1,12 @@
+{
+  "name": "kovan",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-08-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [{ "name": "KOVAN", "class_name": "KovanServer" }]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["KovanServer"] }
+  ]
+}
