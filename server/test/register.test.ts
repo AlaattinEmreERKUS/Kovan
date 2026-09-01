@@ -21,6 +21,23 @@ async function post(path: string, body: unknown) {
   });
 }
 
+async function postRaw(path: string, rawBody: string) {
+  return stub().fetch(`${BASE}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: rawBody,
+  });
+}
+
+async function countUsers(): Promise<number> {
+  let count = 0;
+  await runInDurableObject(stub(), (_i, state) => {
+    const row = state.storage.sql.exec("SELECT COUNT(*) as c FROM users").toArray()[0] as { c: number };
+    count = row.c;
+  });
+  return count;
+}
+
 describe("kayit ve giris", () => {
   beforeEach(async () => {
     await runInDurableObject(stub(), (_i, state) => {
@@ -59,7 +76,8 @@ describe("kayit ve giris", () => {
   it("ayni kullanici adi ikinci kez alinamaz", async () => {
     await seedInvite("A1");
     await seedInvite("A2");
-    await post("/api/register", { code: "A1", username: "napol", displayName: "N", password: "kovan123" });
+    const ilk = await post("/api/register", { code: "A1", username: "napol", displayName: "N", password: "kovan123" });
+    expect(ilk.status).toBe(201);
     const res = await post("/api/register", { code: "A2", username: "napol", displayName: "N", password: "kovan123" });
     expect(res.status).toBe(409);
   });
@@ -78,5 +96,42 @@ describe("kayit ve giris", () => {
   it("olmayan kullanici da 401 doner", async () => {
     const res = await post("/api/login", { username: "hayalet", password: "x" });
     expect(res.status).toBe(401);
+  });
+
+  it("bozuk json govdesi 400 doner", async () => {
+    const res = await postRaw("/api/register", "{ bu gecerli json degil");
+    expect(res.status).toBe(400);
+  });
+
+  it("string olmayan alan 400 doner", async () => {
+    await seedInvite("A1");
+    const res = await post("/api/register", {
+      code: "A1", username: { hack: true }, displayName: "N", password: "kovan123",
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("256 karakterden uzun parola 400 doner", async () => {
+    await seedInvite("A1");
+    const uzunParola = "a".repeat(257);
+    const res = await post("/api/register", {
+      code: "A1", username: "napol", displayName: "N", password: uzunParola,
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json<{ code: string }>();
+    expect(body.code).toBe("uzun_parola");
+  });
+
+  it("ayni davet kodu iki es zamanli istekte yalnizca birine verilir", async () => {
+    await seedInvite("RACE1");
+
+    const [a, b] = await Promise.all([
+      post("/api/register", { code: "RACE1", username: "yaris-a", displayName: "A", password: "kovan123" }),
+      post("/api/register", { code: "RACE1", username: "yaris-b", displayName: "B", password: "kovan123" }),
+    ]);
+
+    const statuses = [a.status, b.status].sort();
+    expect(statuses).toEqual([201, 403]);
+    expect(await countUsers()).toBe(1);
   });
 });

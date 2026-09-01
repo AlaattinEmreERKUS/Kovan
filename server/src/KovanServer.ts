@@ -31,17 +31,40 @@ export class KovanServer implements DurableObject {
   }
 
   private async register(request: Request): Promise<Response> {
-    const { code, username, displayName, password } = await request.json<{
-      code: string; username: string; displayName: string; password: string;
-    }>();
+    let body: { code: unknown; username: unknown; displayName: unknown; password: unknown };
+    try {
+      body = await request.json();
+    } catch {
+      return Response.json({ code: "bozuk_govde", message: "Geçersiz istek gövdesi." }, { status: 400 });
+    }
+    const { code, username, displayName, password } = body;
 
-    if (!code || !username || !displayName || !password) {
+    if (
+      typeof code !== "string" || typeof username !== "string" ||
+      typeof displayName !== "string" || typeof password !== "string" ||
+      !code || !username || !displayName || !password
+    ) {
       return Response.json({ code: "eksik_alan", message: "Tüm alanlar zorunlu." }, { status: 400 });
     }
     if (password.length < 8) {
       return Response.json({ code: "kisa_parola", message: "Parola en az 8 karakter olmalı." }, { status: 400 });
     }
+    if (password.length > 256) {
+      return Response.json({ code: "uzun_parola", message: "Parola en fazla 256 karakter olabilir." }, { status: 400 });
+    }
 
+    // Parolayı EN BAŞTA, herhangi bir DB kontrolünden önce hashle. PBKDF2 (hashPassword)
+    // senkron olmayan tek adım; DO'da yalnızca storage await'leri girdi kapısını (input gate)
+    // serbest bırakır, bu da değil. Aşağıdaki kontrol-sonra-yaz bloğunda TEK BİR await bile
+    // OLMAMALI: aksi halde iki eşzamanlı istek aynı daveti veya kullanıcı adını geçer ve
+    // ikisi de yazar (race). Bu blok senkron this.sql.exec çağrılarından ibaret kaldığı sürece
+    // Durable Object'in input gate'i onu bölünmez kılar.
+    const id = crypto.randomUUID();
+    const salt = newSalt();
+    const passwordHash = await hashPassword(password, salt);
+    const now = Date.now();
+
+    // --- await YOK: kontrol-sonra-yaz bloğu, bölünmez olmak zorunda ---
     const invite = this.sql
       .exec<{ code: string; used_by: string | null }>(
         "SELECT code, used_by FROM invites WHERE code = ?", code)
@@ -57,31 +80,39 @@ export class KovanServer implements DurableObject {
       return Response.json({ code: "kullanici_var", message: "Bu kullanıcı adı alınmış." }, { status: 409 });
     }
 
-    const id = crypto.randomUUID();
-    const salt = newSalt();
-    const passwordHash = await hashPassword(password, salt);
-    const now = Date.now();
-
-    this.sql.exec(
-      "INSERT INTO users (id, username, display_name, password_hash, salt, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-      id, username, displayName, passwordHash, salt, now
-    );
+    try {
+      this.sql.exec(
+        "INSERT INTO users (id, username, display_name, password_hash, salt, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        id, username, displayName, passwordHash, salt, now
+      );
+    } catch {
+      // Savunma katmanı: UNIQUE(username) yarışı buraya sızarsa yine 409 döndür, 500 değil.
+      return Response.json({ code: "kullanici_var", message: "Bu kullanıcı adı alınmış." }, { status: 409 });
+    }
     this.sql.exec("UPDATE invites SET used_by = ?, used_at = ? WHERE code = ?", id, now, code);
+    // --- await YOK bloğu sona erdi ---
 
     const token = await this.issueSession(id);
     return Response.json({ token, user: { id, username, displayName } }, { status: 201 });
   }
 
   private async login(request: Request): Promise<Response> {
-    const { username, password } = await request.json<{ username: string; password: string }>();
+    let body: { username: unknown; password: unknown };
+    try {
+      body = await request.json();
+    } catch {
+      return Response.json({ code: "bozuk_govde", message: "Geçersiz istek gövdesi." }, { status: 400 });
+    }
+    const username = typeof body.username === "string" ? body.username : "";
+    const password = typeof body.password === "string" ? body.password : "";
 
     const row = this.sql
-      .exec<UserRow>("SELECT * FROM users WHERE username = ?", username ?? "")
+      .exec<UserRow>("SELECT * FROM users WHERE username = ?", username)
       .toArray()[0];
 
     // Kullanıcı yoksa da hash hesapla: varlık bilgisi zamanlamadan sızmasın.
     const salt = row?.salt ?? newSalt();
-    const attempt = await hashPassword(password ?? "", salt);
+    const attempt = await hashPassword(password, salt);
 
     if (!row || !timingSafeEqual(attempt, row.password_hash)) {
       return Response.json({ code: "gecersiz_giris", message: "Kullanıcı adı veya parola hatalı." }, { status: 401 });
