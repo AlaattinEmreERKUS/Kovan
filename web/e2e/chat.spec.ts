@@ -37,13 +37,17 @@ test("iki kullanici gercek zamanli mesajlasir ve tepki verir", async ({ browser 
   await kayitOl(b, `E2-${damga}`, `Denis${damga}`);
 
   // A yazar, B anlik gorur
-  await a.getByLabel("Mesaj yaz").fill("selam kovan");
+  const mesaj = `selam kovan ${damga}`;
+  await a.getByLabel("Mesaj yaz").fill(mesaj);
   await a.getByLabel("Mesaj yaz").press("Enter");
-  await expect(b.getByText("selam kovan")).toBeVisible();
+  await expect(b.getByText(mesaj)).toBeVisible();
 
   // B tepki verir, A gorur
-  await b.getByText("selam kovan").hover();
-  await b.getByLabel("🔥 ekle").first().click();
+  // Tepki dugmesi MESAJA bagli secilmeli: .first() sayfadaki en eski mesajin
+  // dugmesini tikliyor ve yerel wrangler dev veritabani kosular arasi kaliyor.
+  const satir = b.locator(".mesaj", { hasText: mesaj });
+  await satir.hover();
+  await satir.getByLabel("🔥 ekle").click();
   await expect(a.getByLabel(/🔥 tepkisi, 1 kişi/)).toBeVisible();
 
   // A yaziyor gostergesi B'de gorunur

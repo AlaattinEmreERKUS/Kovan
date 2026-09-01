@@ -33,6 +33,23 @@ export class KovanServer implements DurableObject {
     if (request.method === "POST" && url.pathname === "/api/login") {
       return this.login(request);
     }
+    // Yonetici davet ucu. DO SQLite'a CLI'dan erisim yok; davet uretmenin
+    // tek yolu bu. Anahtar sabit zamanda karsilastirilir.
+    if (request.method === "POST" && url.pathname === "/api/admin/invite") {
+      const key = this.env.ADMIN_KEY;
+      const gelen = request.headers.get("x-admin") ?? "";
+      if (!key || !timingSafeEqual(gelen, key)) {
+        return new Response("forbidden", { status: 403 });
+      }
+      const body = await KovanServer.readObject(request);
+      const code = typeof body?.code === "string" ? body.code.trim() : "";
+      if (!code || code.length > 64) {
+        return Response.json({ code: "gecersiz_kod", message: "Davet kodu gecersiz." }, { status: 400 });
+      }
+      this.sql.exec("INSERT OR IGNORE INTO invites (code) VALUES (?)", code);
+      return Response.json({ ok: true });
+    }
+
     // Yalnizca yerel gelistirmede: KOVAN_DEV bayragi wrangler dev --var ile
     // geliyor, deploy'da tanimsiz.
     if (request.method === "POST" && url.pathname === "/api/dev/invite" && this.env.KOVAN_DEV === "1") {

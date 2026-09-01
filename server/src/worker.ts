@@ -8,6 +8,8 @@ export interface Env {
    * erisim kontrolu.
    */
   KOVAN_DEV?: string;
+  /** `wrangler secret put ADMIN_KEY` ile tanimlanir. Davet uretme ucunu korur. */
+  ADMIN_KEY?: string;
 }
 
 /**

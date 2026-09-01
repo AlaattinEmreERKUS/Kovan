@@ -11,6 +11,11 @@
       .filter((ad): ad is string => ad !== undefined)
   );
 
+  // Baglanti acilmadan yazilan mesaj sessizce kaybolurdu: SSR ile gelen HTML'de
+  // kutu goruntuleniyor ama olay isleyicileri hidrasyon bitene kadar bagli
+  // degil. Kutu kapaliyken kullanici bunu goruyor.
+  const hazir = $derived(store.durum === "acik");
+
   function tusla(e: KeyboardEvent) {
     if (e.key !== "Enter" || e.shiftKey) return;
     e.preventDefault();
@@ -27,7 +32,8 @@
     onkeydown={tusla}
     oninput={onTyping}
     rows="1"
-    placeholder="Bir mesaj yaz…"
+    disabled={!hazir}
+    placeholder={hazir ? "Bir mesaj yaz…" : "Bağlanıyor…"}
     aria-label="Mesaj yaz"
   ></textarea>
   <div class="yaziyor" aria-live="polite">
@@ -44,5 +50,6 @@
     font: inherit; transition: border-color var(--gecis);
   }
   textarea:focus { outline: none; border-color: var(--bal); }
+  textarea:disabled { opacity: 0.6; cursor: progress; }
   .yaziyor { height: 18px; padding-top: 3px; font-size: 12px; color: var(--metin-3); }
 </style>
