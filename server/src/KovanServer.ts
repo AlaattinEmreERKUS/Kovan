@@ -1,8 +1,8 @@
 import { ensureSchema } from "./schema";
 import { hashPassword, hashToken, newSalt, newSessionToken, timingSafeEqual } from "./auth";
-import { broadcast, onlineUserIds, readState, socketsOf, writeState } from "./sockets";
-import { recentMessages, reactionsFor } from "./messages";
-import type { ServerEvent, User } from "@shared/protocol";
+import { type SocketState, broadcast, onlineUserIds, readState, socketsOf, writeState } from "./sockets";
+import { MAX_CONTENT, insertMessage, reactionsFor, recentMessages } from "./messages";
+import type { ClientEvent, ServerEvent, User } from "@shared/protocol";
 
 interface UserRow extends Record<string, SqlStorageValue> {
   id: string;
@@ -77,6 +77,55 @@ export class KovanServer implements DurableObject {
         "SELECT id, username, display_name FROM users ORDER BY created_at")
       .toArray()
       .map((r) => ({ id: r.id, username: r.username, displayName: r.display_name }));
+  }
+
+  async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
+    if (typeof raw !== "string") return;
+
+    let event: unknown;
+    try {
+      event = JSON.parse(raw);
+    } catch {
+      return this.fail(ws, "bozuk_paket", "Geçersiz JSON.");
+    }
+    // "null" ve 42 gecerli JSON'dur ama olay degildir; alan okumasi patlamasin.
+    if (typeof event !== "object" || event === null || Array.isArray(event)) {
+      return this.fail(ws, "bozuk_paket", "Olay bir nesne olmalı.");
+    }
+
+    const state = readState(ws);
+
+    switch ((event as ClientEvent).t) {
+      case "msg.send":
+        return this.handleSend(ws, state, event as Extract<ClientEvent, { t: "msg.send" }>);
+      default:
+        return this.fail(ws, "bilinmeyen_olay", `Tanınmayan olay: ${(event as { t: string }).t}`);
+    }
+  }
+
+  private handleSend(
+    ws: WebSocket,
+    state: SocketState,
+    event: Extract<ClientEvent, { t: "msg.send" }>
+  ): void {
+    // content string olmayabilir (istemci bozuk olabilir): trim() cagrisi
+    // patlarsa handler icinde firlatilan hata socket'i sessizce oldurur.
+    const content = typeof event.content === "string" ? event.content.trim() : "";
+    if (content.length === 0) return this.fail(ws, "bos_mesaj", "Boş mesaj gönderilemez.");
+    if (content.length > MAX_CONTENT) {
+      return this.fail(ws, "uzun_mesaj", `Mesaj en fazla ${MAX_CONTENT} karakter olabilir.`);
+    }
+    const localId = typeof event.localId === "string" ? event.localId : undefined;
+
+    const message = insertMessage(this.sql, state.userId, content);
+
+    // Gönderene localId ile döner (optimistic UI eşlemesi), diğerlerine sade.
+    ws.send(JSON.stringify({ t: "msg.new", message, localId } satisfies ServerEvent));
+    broadcast(this.ctx, { t: "msg.new", message }, ws);
+  }
+
+  private fail(ws: WebSocket, code: string, message: string): void {
+    ws.send(JSON.stringify({ t: "error", code, message } satisfies ServerEvent));
   }
 
   async webSocketClose(ws: WebSocket): Promise<void> {

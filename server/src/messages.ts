@@ -32,3 +32,16 @@ export function reactionsFor(sql: SqlStorage, messageIds: number[]): ReactionSta
   }
   return [...grup.values()];
 }
+
+export const MAX_CONTENT = 2000;
+
+export function insertMessage(sql: SqlStorage, authorId: string, content: string): Message {
+  const createdAt = Date.now();
+  const row = sql
+    .exec<{ id: number }>(
+      "INSERT INTO messages (author_id, content, created_at) VALUES (?, ?, ?) RETURNING id",
+      authorId, content, createdAt
+    )
+    .toArray()[0];
+  return { id: row.id, authorId, content, createdAt };
+}

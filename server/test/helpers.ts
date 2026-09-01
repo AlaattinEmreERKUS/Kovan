@@ -33,28 +33,54 @@ export async function kayit(code: string, username: string): Promise<string> {
   return (await res.json<{ token: string }>()).token;
 }
 
+/**
+ * Gelen olaylar accept() anindan itibaren kuyruga alinir. Sunucu `hello`yi
+ * baglantidan hemen sonra gonderir; testin dinleyiciyi baglamasini beklemez.
+ * Kuyruk olmadan araya giren bir await (ornegin ikinci kayit'in PBKDF2'si)
+ * o olayi kaybettiriyordu.
+ */
+const kuyruklar = new WeakMap<WebSocket, ServerEvent[]>();
+
 export async function baglan(token: string): Promise<WebSocket> {
   const res = await stub().fetch(`${BASE}/ws?token=${token}`, {
     headers: { Upgrade: "websocket" },
   });
   const ws = res.webSocket!;
   ws.accept();
+  const kuyruk: ServerEvent[] = [];
+  kuyruklar.set(ws, kuyruk);
+  ws.addEventListener("message", (e) => {
+    kuyruk.push(JSON.parse(e.data as string) as ServerEvent);
+  });
   return ws;
 }
 
-/** Belirtilen tipte ilk olayı bekler, 2 saniyede gelmezse hata fırlatır. */
+/** Belirtilen tipte ilk olayı kuyruktan alır, 2 saniyede gelmezse hata fırlatır. */
 export function bekle<T extends ServerEvent["t"]>(
   ws: WebSocket, tip: T
 ): Promise<Extract<ServerEvent, { t: T }>> {
+  const kuyruk = kuyruklar.get(ws);
+  if (!kuyruk) throw new Error("bekle(): socket baglan() ile acilmali");
+
+  const al = (): Extract<ServerEvent, { t: T }> | undefined => {
+    const i = kuyruk.findIndex((o) => o.t === tip);
+    return i < 0 ? undefined : (kuyruk.splice(i, 1)[0] as Extract<ServerEvent, { t: T }>);
+  };
+
+  const hazir = al();
+  if (hazir) return Promise.resolve(hazir);
+
   return new Promise((resolve, reject) => {
-    const zamanlayici = setTimeout(() => reject(new Error(`${tip} gelmedi`)), 2000);
-    const dinleyici = (e: MessageEvent) => {
-      const olay = JSON.parse(e.data as string) as ServerEvent;
-      if (olay.t === tip) {
-        clearTimeout(zamanlayici);
-        ws.removeEventListener("message", dinleyici);
-        resolve(olay as Extract<ServerEvent, { t: T }>);
-      }
+    const zamanlayici = setTimeout(() => {
+      ws.removeEventListener("message", dinleyici);
+      reject(new Error(`${tip} gelmedi`));
+    }, 2000);
+    const dinleyici = () => {
+      const olay = al();
+      if (!olay) return;
+      clearTimeout(zamanlayici);
+      ws.removeEventListener("message", dinleyici);
+      resolve(olay);
     };
     ws.addEventListener("message", dinleyici);
   });
