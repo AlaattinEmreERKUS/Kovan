@@ -104,6 +104,10 @@ test("ekran paylasimi izleyiciye ayri yuvalardan ulasir", async ({ browser }) =>
   // gorunurluk katmaninda (lib/stage.ts).
   await expect(b.locator('[data-kare="kisi"] video')).toHaveCount(0);
 
+  // Form denetimleri TEMA renginde: tarayici varsayilani mavi, bal degil.
+  // accent-color body'den kalitiliyor (tokens.css).
+  await expect(b.getByLabel(/ekran ses seviyesi/)).toHaveCSS("accent-color", "rgb(232, 163, 61)");
+
   // Kaydiriciyi 0'a cekmek ekran sesini susturur; mikrofon etkilenmez.
   await b.getByLabel(/ekran ses seviyesi/).fill("0");
   const seviye = await b.evaluate(() => {

@@ -33,6 +33,12 @@ html, body {
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  /*
+    Tarayici varsayilani MAVI: range kaydiricilari ve ses ayarlarindaki
+    onay kutulari temanin disina dusuyordu. accent-color KALITILIR, bu
+    yuzden tek yerde vermek hepsini kapsar.
+  */
+  accent-color: var(--bal);
 }
 
 button {
