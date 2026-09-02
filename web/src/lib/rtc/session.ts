@@ -1,6 +1,6 @@
 import type { VoiceMember } from "@shared/protocol";
 import type { Connection } from "../connection.svelte";
-import { bosTracks, localFlags, voice } from "../voice.svelte";
+import { bosTracks, bosYerel, localFlags, voice } from "../voice.svelte";
 import { LocalMedia } from "./media";
 import { Mesh } from "./mesh";
 import { Peer, type SignalPayload, type TrackSlot } from "./peer";
@@ -113,6 +113,7 @@ export class VoiceSession {
     voice.screen = false;
     voice.screenAudio = false;
     voice.remote.clear();
+    voice.local = bosYerel();
     voice.speaking.clear();
     voice.connection.clear();
   }
@@ -150,6 +151,8 @@ export class VoiceSession {
       this.mesh?.setTrack("cam", null);
       this.media.stopCamera();
     }
+    // Yeni nesne: ayni referansi tekrar yazmak aboneleri uyandirmaz.
+    voice.local = { ...voice.local, cam: on ? this.media.cam : null };
     voice.camera = on;
     this.publish();
   }
@@ -178,6 +181,7 @@ export class VoiceSession {
     // Bu dinleyici olmadan digerleri olu bir kare gorur (spec 8.1 adim 6).
     video.addEventListener("ended", () => this.stopScreen());
 
+    voice.local = { ...voice.local, screenVideo: video };
     voice.screen = true;
     voice.screenAudio = audio !== null;
     this.publish();
@@ -188,6 +192,7 @@ export class VoiceSession {
     this.mesh?.setTrack("screenVideo", null);
     this.mesh?.setTrack("screenAudio", null);
     this.media.stopScreen();
+    voice.local = { ...voice.local, screenVideo: null };
     voice.screen = false;
     voice.screenAudio = false;
     this.publish();

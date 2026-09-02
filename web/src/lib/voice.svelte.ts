@@ -16,6 +16,13 @@ export function bosTracks(): RemoteTracks {
   return { mic: null, cam: null, screenVideo: null, screenAudio: null };
 }
 
+import type { YerelTracks } from "./stage";
+export type { YerelTracks };
+
+export function bosYerel(): YerelTracks {
+  return { cam: null, screenVideo: null };
+}
+
 /**
  * Duz Set/Map $state icinde derin tepkisel DEGILDIR (store.svelte.ts'teki
  * ayni gerekce). svelte/reactivity karsiliklari zorunlu.
@@ -32,6 +39,12 @@ export const voice = $state({
   /** Su an konusan kullanicilar. Yerel olcum, sunucuya GITMEZ. */
   speaking: new SvelteSet<string>(),
   remote: new SvelteMap<string, RemoteTracks>(),
+  /**
+   * Kendi video track'lerimiz. Bileşenler LocalMedia'ya erisemez; kendi
+   * karendeki onizleme bu yuzden buradan okunur. Mikrofon ve ekran sesi
+   * BILEREK yok: kendi sesini render etmek geri besleme demektir.
+   */
+  local: bosYerel(),
   /**
    * userId -> RTCPeerConnection durumu. "failed" kalici bir arizadir: ICE
    * hicbir yol bulamadi. TURN olmadan simetrik NAT arkasindaki kullanicida
@@ -63,6 +76,7 @@ export function resetVoice(): void {
   voice.screenAudio = false;
   voice.speaking.clear();
   voice.remote.clear();
+  voice.local = bosYerel();
   voice.connection.clear();
   voice.error = null;
 }

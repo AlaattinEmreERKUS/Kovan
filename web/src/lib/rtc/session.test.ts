@@ -68,6 +68,38 @@ function kur() {
   return { session, conn, gonderilen, pcler, mikrofon };
 }
 
+/** kur() ile ayni, ama getDisplayMedia gercek bir track doner. */
+function kurEkranli() {
+  const gonderilen: unknown[] = [];
+  const conn = {
+    send: (e: unknown) => gonderilen.push(e),
+    onVoiceMembers: null as ((m: unknown[]) => void) | null,
+    onSignal: null as ((f: string, d: unknown) => void) | null,
+  };
+  const mikrofon = sahteTrack("audio");
+  const ekran = sahteTrack("video");
+  const deps: MediaDeps = {
+    getUserMedia: vi.fn(async () => ({
+      getAudioTracks: () => [mikrofon],
+      getVideoTracks: () => [sahteTrack("video")],
+      getTracks: () => [mikrofon],
+    } as unknown as MediaStream)),
+    getDisplayMedia: vi.fn(async () => ({
+      getVideoTracks: () => [ekran],
+      getAudioTracks: () => [],
+      getTracks: () => [ekran],
+    } as unknown as MediaStream)),
+  };
+  const session = new VoiceSession({
+    conn: conn as never, selfId: "u2", apiUrl: "https://api.test", token: "tok",
+    media: new LocalMedia(deps),
+    createPeerConnection: () => new SahtePC() as unknown as RTCPeerConnection,
+    createAudioContext: () => null,
+    fetchImpl: vi.fn(async () => Response.json({ iceServers: [] })) as unknown as typeof fetch,
+  });
+  return { session, conn, gonderilen, ekran };
+}
+
 beforeEach(() => resetVoice());
 afterEach(() => vi.restoreAllMocks());
 
@@ -233,5 +265,92 @@ describe("VoiceSession baglanti durumu", () => {
     pcler[0].onconnectionstatechange!();
     session.leave();
     expect(voice.connection.size).toBe(0);
+  });
+});
+
+describe("voice.local yerel track yuzeyi", () => {
+  it("baslangicta iki yuva da bos", () => {
+    expect(voice.local).toEqual({ cam: null, screenVideo: null });
+  });
+
+  it("kamera acilinca local.cam dolar", async () => {
+    const { session } = kur();
+    await session.join();
+    await session.setCamera(true);
+    expect(voice.local.cam).not.toBeNull();
+    expect(voice.local.cam?.kind).toBe("video");
+  });
+
+  it("kamera kapaninca local.cam bosalir", async () => {
+    const { session } = kur();
+    await session.join();
+    await session.setCamera(true);
+    await session.setCamera(false);
+    expect(voice.local.cam).toBeNull();
+  });
+
+  it("kamera acilirken hata olursa local.cam bos kalir", async () => {
+    const gonderilen: unknown[] = [];
+    const conn = {
+      send: (e: unknown) => gonderilen.push(e),
+      onVoiceMembers: null, onSignal: null,
+    };
+    const mikrofon = sahteTrack("audio");
+    let ilkCagri = true;
+    const deps: MediaDeps = {
+      getUserMedia: vi.fn(async () => {
+        // Ilk cagri mikrofon (join), ikinci cagri kamera: kamera reddedilsin.
+        if (ilkCagri) {
+          ilkCagri = false;
+          return { getAudioTracks: () => [mikrofon], getVideoTracks: () => [], getTracks: () => [mikrofon] } as unknown as MediaStream;
+        }
+        throw new Error("NotAllowedError");
+      }),
+      getDisplayMedia: vi.fn(),
+    };
+    const session = new VoiceSession({
+      conn: conn as never, selfId: "u2", apiUrl: "https://api.test", token: "tok",
+      media: new LocalMedia(deps),
+      createPeerConnection: () => new SahtePC() as unknown as RTCPeerConnection,
+      createAudioContext: () => null,
+      fetchImpl: vi.fn(async () => Response.json({ iceServers: [] })) as unknown as typeof fetch,
+    });
+    await session.join();
+    await session.setCamera(true);
+    expect(voice.camera).toBe(false);
+    expect(voice.local.cam).toBeNull();
+  });
+
+  it("ekran paylasimi baslayinca local.screenVideo dolar", async () => {
+    const { session } = kurEkranli();
+    await session.join();
+    await session.startScreen({ surface: "monitor", systemAudio: false });
+    expect(voice.local.screenVideo).not.toBeNull();
+  });
+
+  it("ekran paylasimi durunca local.screenVideo bosalir", async () => {
+    const { session } = kurEkranli();
+    await session.join();
+    await session.startScreen({ surface: "monitor", systemAudio: false });
+    session.stopScreen();
+    expect(voice.local.screenVideo).toBeNull();
+  });
+
+  it("leave iki yuvayi da temizler", async () => {
+    const { session } = kurEkranli();
+    await session.join();
+    await session.setCamera(true);
+    await session.startScreen({ surface: "monitor", systemAudio: false });
+    session.leave();
+    expect(voice.local).toEqual({ cam: null, screenVideo: null });
+  });
+
+  it("her yazimda yeni nesne atanir", async () => {
+    // Ayni referansi tekrar yazmak Svelte abonelerini uyandirmaz.
+    const { session } = kur();
+    await session.join();
+    const once = voice.local;
+    await session.setCamera(true);
+    expect(voice.local).not.toBe(once);
   });
 });
