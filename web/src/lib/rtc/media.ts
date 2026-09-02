@@ -82,6 +82,12 @@ export class LocalMedia {
    */
   async startScreen(): Promise<{ video: MediaStreamTrack; audio: MediaStreamTrack | null }> {
     const stream = await this.deps.getDisplayMedia(buildConstraints());
+    // Paylasim SURERKEN kaynak degistirilebilir. Eskiyi ancak yeni akis
+    // GELDIKTEN sonra birakiyoruz: once biraksaydik secicide vazgecen
+    // kullanici paylasimini komple kaybederdi. Birakmasaydik da eski
+    // yakalama arka planda okumaya devam ederdi.
+    this.screenVideo?.stop();
+    this.screenAudio?.stop();
     this.screenVideo = stream.getVideoTracks()[0];
     // Ses kutusu native secicide isaretlenmemis olabilir; o zaman audio
     // track hic gelmez ve serit "sistem sesi acik" yazmaz.

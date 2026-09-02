@@ -216,3 +216,65 @@ test("ekran buyutulup kucultulur, Esc de kapatir", async ({ browser }) => {
   await ctxA.close();
   await ctxB.close();
 });
+
+test("kaynak degistirilince izleyici kopma gormez", async ({ browser }) => {
+  const damga = Date.now();
+  await davetUret(`S7-${damga}`);
+  await davetUret(`S8-${damga}`);
+
+  const ctxA = await browser.newContext();
+  const ctxB = await browser.newContext();
+  await ctxA.addInitScript(SAHTE_EKRAN);
+  const a = await ctxA.newPage();
+  const b = await ctxB.newPage();
+
+  await kayitOl(a, `S7-${damga}`, `Degistiren${damga}`);
+  await kayitOl(b, `S8-${damga}`, `Izleyen${damga}`);
+
+  await a.getByLabel("Ses kanalına katıl").click();
+  await b.getByLabel("Ses kanalına katıl").click();
+  await expect(a.getByText("2/4")).toBeVisible();
+
+  await a.getByLabel("Ekran paylaş").click();
+  await expect(b.locator('[data-kare="ekran"] video')).toBeVisible({ timeout: 15_000 });
+
+  const yerelIz = () => a.evaluate(() => {
+    const k = window as unknown as { __kovan: { voice: { local: { screenVideo: MediaStreamTrack | null } } } };
+    return k.__kovan.voice.local.screenVideo?.id ?? null;
+  });
+  const uzakIz = () => b.evaluate(() => {
+    const k = window as unknown as {
+      __kovan: { voice: { remote: Map<string, { screenVideo: MediaStreamTrack | null }> } };
+    };
+    return [...k.__kovan.voice.remote.values()][0]?.screenVideo?.id ?? null;
+  });
+
+  const yerelOnce = await yerelIz();
+  const uzakOnce = await uzakIz();
+  expect(yerelOnce).not.toBeNull();
+  expect(uzakOnce).not.toBeNull();
+
+  // Serit dugmesi. exact sart: kontrol cubugunda baska metinler de var.
+  await a.getByRole("status").getByRole("button", { name: "Değiştir", exact: true }).click();
+
+  // Paylasanin YEREL kaynagi degisir.
+  await expect.poll(yerelIz, { timeout: 20_000 }).not.toBe(yerelOnce);
+
+  // Izleyicinin UZAK track'i AYNI kalir: replaceTrack yeniden gorusme
+  // baslatmaz, ayni RTP akisinin kaynagi degisir. Kopma yoklugunun kaniti
+  // budur -- yeni bir track gelseydi bir an bos kare olurdu.
+  expect(await uzakIz()).toBe(uzakOnce);
+  await expect(b.getByLabel("ekran paylaşıyor")).toBeVisible();
+  await expect(b.locator('[data-kare="ekran"]')).toHaveCount(1);
+
+  // Paylasan tarafta serit hic dusmedi.
+  await expect(a.getByRole("status")).toContainText("Ekranını paylaşıyorsun");
+
+  // Degistirmeden sonra durdurmak hala calisir (eski track'in ended'i
+  // yeni paylasimi kapatmis olsaydi bu kapi zaten once patlardi).
+  await a.getByRole("status").getByRole("button", { name: "Durdur", exact: true }).click();
+  await expect(b.getByLabel("ekran paylaşıyor")).toBeHidden({ timeout: 15_000 });
+
+  await ctxA.close();
+  await ctxB.close();
+});

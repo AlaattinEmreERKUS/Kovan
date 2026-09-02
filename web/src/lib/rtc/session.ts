@@ -227,14 +227,57 @@ export class VoiceSession {
     this.mesh?.setTrack("screenVideo", video);
     this.mesh?.setTrack("screenAudio", audio);
 
-    // Kullanici bizim seridimizi degil Chromium'un cubugunu kullanabilir.
-    // Bu dinleyici olmadan digerleri olu bir kare gorur (spec 8.1 adim 6).
-    video.addEventListener("ended", () => this.stopScreen());
+    this.ekranBittiDinle(video);
 
     voice.local = { ...voice.local, screenVideo: video };
     voice.screen = true;
     voice.screenAudio = audio !== null;
     this.publish();
+  }
+
+  /**
+   * Paylasim SURERKEN kaynagi degistirir: native secici yeniden acilir, secilen
+   * yuzey replaceTrack ile yerine gecer (mesh.setTrack). Yeniden gorusme YOK,
+   * `voice.screen` hic false'a dusmez -- karsi taraf kopma gormez.
+   *
+   * Vazgecmek bir ariza degil: eski paylasim aynen surer, hata gosterilmez.
+   */
+  async degistirEkran(): Promise<void> {
+    if (!voice.screen) return;
+    let video: MediaStreamTrack;
+    let audio: MediaStreamTrack | null;
+    try {
+      ({ video, audio } = await this.media.startScreen());
+    } catch (e) {
+      if ((e as DOMException)?.name !== "NotAllowedError") {
+        voice.error = "Ekran kaynağı değiştirilemedi.";
+      }
+      return;
+    }
+
+    this.mesh?.setTrack("screenVideo", video);
+    this.mesh?.setTrack("screenAudio", audio);
+    this.ekranBittiDinle(video);
+
+    voice.local = { ...voice.local, screenVideo: video };
+    // Yeni secimde sistem sesi kutusu isaretlenmemis olabilir.
+    voice.screenAudio = audio !== null;
+    this.publish();
+  }
+
+  /**
+   * Kullanici bizim seridimizi degil Chromium'un cubugunu kullanabilir; bu
+   * dinleyici olmadan digerleri olu bir kare gorur (spec 8.1 adim 6).
+   *
+   * Guncellik kontrolu SART: kaynak degistirildiginde eski track duruyor.
+   * `stop()` spec'e gore `ended` atesLEMEZ ama buna guvenmiyoruz -- eski
+   * track'in olayi yeni paylasimi kapatirdi.
+   */
+  private ekranBittiDinle(track: MediaStreamTrack): void {
+    track.addEventListener("ended", () => {
+      if (this.media.screenVideo !== track) return;
+      this.stopScreen();
+    });
   }
 
   stopScreen(): void {

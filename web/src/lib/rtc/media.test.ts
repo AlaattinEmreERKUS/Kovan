@@ -157,3 +157,51 @@ describe("LocalMedia ekran paylasimi", () => {
     expect(media.screenAudio).toBeNull();
   });
 });
+
+describe("LocalMedia ekran kaynagi degistirme", () => {
+  /** Her cagrida FARKLI track uretir; degistirme testinin sarti tam olarak bu. */
+  function degistirKur() {
+    const akislar: Array<{ video: MediaStreamTrack; audio: MediaStreamTrack }> = [];
+    const durum = { reddet: false };
+    const deps: MediaDeps = {
+      getUserMedia: vi.fn(),
+      getDisplayMedia: vi.fn(async () => {
+        if (durum.reddet) throw new DOMException("iptal", "NotAllowedError");
+        const video = sahteTrack("video");
+        const audio = sahteTrack("audio");
+        akislar.push({ video, audio });
+        return sahteStream(video, audio);
+      }),
+    };
+    return { media: new LocalMedia(deps), akislar, durum };
+  }
+
+  it("ikinci startScreen eski track'leri durdurur", async () => {
+    // Durdurulmazsa eski yakalama arka planda yasamaya devam eder: kullanici
+    // paylasimi birakti sanir, pencere hala okunuyordur.
+    const { media, akislar } = degistirKur();
+    await media.startScreen();
+    await media.startScreen();
+
+    const [eski, yeni] = akislar;
+    expect(eski.video.stop).toHaveBeenCalled();
+    expect(eski.audio.stop).toHaveBeenCalled();
+    expect(yeni.video.stop).not.toHaveBeenCalled();
+    expect(media.screenVideo).toBe(yeni.video);
+    expect(media.screenAudio).toBe(yeni.audio);
+  });
+
+  it("secici reddedilirse eski track'ler yasamaya devam eder", async () => {
+    // SIRA onemli: eskiyi yeni akis GELDIKTEN sonra birakiyoruz. Once
+    // biraksaydik vazgecen kullanici paylasimini komple kaybederdi.
+    const { media, akislar, durum } = degistirKur();
+    await media.startScreen();
+    const eski = akislar[0];
+
+    durum.reddet = true;
+    await expect(media.startScreen()).rejects.toThrow();
+
+    expect(eski.video.stop).not.toHaveBeenCalled();
+    expect(media.screenVideo).toBe(eski.video);
+  });
+});

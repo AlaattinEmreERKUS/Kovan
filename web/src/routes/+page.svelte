@@ -159,7 +159,10 @@
       donmen paylasimin durdurma dugmesini kaybetmeni gerektirmez.
       e2e/screen.spec.ts bunu sahnedeyken getByRole("status") ile ariyor.
     -->
-    <ShareBanner onStop={() => oturum?.stopScreen()} />
+    <ShareBanner
+      onStop={() => oturum?.stopScreen()}
+      onDegistir={() => oturum?.degistirEkran()}
+    />
 
     {#if aktifSekme === "ses" && voice.joined && store.me}
       <VoiceStage

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { voice } from "$lib/voice.svelte";
-  let { onStop }: { onStop: () => void } = $props();
+  let { onStop, onDegistir }: { onStop: () => void; onDegistir: () => void } = $props();
 </script>
 
 {#if voice.screen}
@@ -8,7 +8,15 @@
     <span class="nokta" aria-hidden="true"></span>
     <span>Ekranını paylaşıyorsun</span>
     {#if voice.screenAudio}<span class="ek">· sistem sesi açık</span>{/if}
-    <button onclick={onStop}>Durdur</button>
+    <div class="eylemler">
+      <!--
+        Chromium'un kendi cubugundaki "bunun yerine bu sekmeyi paylas" YALNIZ
+        sekme yakalamada cikiyor; pencere ve ekranda cikmiyor. Bu dugme o
+        boslugu kapatir.
+      -->
+      <button onclick={onDegistir}>Değiştir</button>
+      <button onclick={onStop}>Durdur</button>
+    </div>
   </div>
 {/if}
 
@@ -29,6 +37,7 @@
     background: var(--bal); box-shadow: 0 0 6px var(--bal);
   }
   .ek { color: var(--metin-2); }
-  button { margin-left: auto; padding: 2px 10px; color: var(--bal-sicak); }
+  .eylemler { margin-left: auto; display: flex; gap: 4px; }
+  button { padding: 2px 10px; color: var(--bal-sicak); }
   button:hover { background: var(--zemin-2); }
 </style>

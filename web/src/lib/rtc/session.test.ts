@@ -206,8 +206,13 @@ describe("VoiceSession ekran paylasimi", () => {
     const dinleyiciler: Array<() => void> = [];
     (video as unknown as { addEventListener: unknown }).addEventListener =
       (tip: string, fn: () => void) => { if (tip === "ended") dinleyiciler.push(fn); };
-    const s = session as unknown as { media: { startScreen: unknown } };
-    s.media.startScreen = vi.fn(async () => ({ video, audio: null }));
+    // Gercek startScreen guncel track'i LocalMedia'ya da yazar; sahte de
+    // yazmali, yoksa "bu track hala guncel mi" kontrolu yanlis cevap verir.
+    const s = session as unknown as { media: { startScreen: unknown; screenVideo: unknown } };
+    s.media.startScreen = vi.fn(async () => {
+      s.media.screenVideo = video;
+      return { video, audio: null };
+    });
 
     await session.startScreen();
     expect(voice.screen).toBe(true);
@@ -409,5 +414,100 @@ describe("VoiceSession uzak track yonetimi", () => {
     const { ates } = await baglaVeGonder(1);
     ates("ended");
     expect(voice.remote.get("u1")?.cam).toBeNull();
+  });
+});
+
+describe("VoiceSession ekran kaynagi degistirme", () => {
+  /** `ended` dinleyicilerini yakalayan track: eski/yeni ayrimi buna dayaniyor. */
+  function dinlenebilirTrack() {
+    const dinleyiciler: Array<() => void> = [];
+    const track = sahteTrack("video");
+    (track as unknown as { addEventListener: unknown }) .addEventListener =
+      (tip: string, fn: () => void) => { if (tip === "ended") dinleyiciler.push(fn); };
+    return { track, tetikle: () => dinleyiciler.forEach((fn) => fn()) };
+  }
+
+  /** startScreen'i sahteler ve LocalMedia'nin guncel track'ini de gunceller. */
+  function ekranVer(session: unknown, track: MediaStreamTrack) {
+    const s = session as { media: { startScreen: unknown; screenVideo: unknown; screenAudio: unknown } };
+    s.media.startScreen = vi.fn(async () => {
+      s.media.screenVideo = track;
+      s.media.screenAudio = null;
+      return { video: track, audio: null };
+    });
+  }
+
+  async function paylasimda() {
+    const ortam = kur();
+    await ortam.session.join();
+    const eski = dinlenebilirTrack();
+    ekranVer(ortam.session, eski.track);
+    await ortam.session.startScreen();
+    return { ...ortam, eski };
+  }
+
+  it("kaynak degisince yeni track yayilir ve paylasim hic kesilmez", async () => {
+    const { session, gonderilen, eski } = await paylasimda();
+    const yeni = dinlenebilirTrack();
+    ekranVer(session, yeni.track);
+
+    await session.degistirEkran();
+
+    expect(voice.local.screenVideo).toBe(yeni.track);
+    expect(voice.local.screenVideo).not.toBe(eski.track);
+    expect(voice.screen).toBe(true);
+    // Karsi taraf kopma GORMEZ: screen:false hic yayilmadi.
+    expect(gonderilen.filter((e) => (e as { screen?: boolean }).screen === false)).toHaveLength(0);
+  });
+
+  it("secicide vazgecilirse mevcut paylasim aynen surer", async () => {
+    const { session, eski } = await paylasimda();
+    const s = session as unknown as { media: { startScreen: unknown } };
+    s.media.startScreen = vi.fn(async () => { throw new DOMException("iptal", "NotAllowedError"); });
+
+    await session.degistirEkran();
+
+    expect(voice.screen).toBe(true);
+    expect(voice.local.screenVideo).toBe(eski.track);
+    expect(voice.error).toBeNull();
+  });
+
+  it("eski track'in ended olayi yeni paylasimi durdurmaz", async () => {
+    // stop() spec'e gore ended atesLEMEZ, ama buna guvenmiyoruz: dinleyici
+    // track'in hala guncel olup olmadigina bakar.
+    const { session, eski } = await paylasimda();
+    const yeni = dinlenebilirTrack();
+    ekranVer(session, yeni.track);
+    await session.degistirEkran();
+
+    eski.tetikle();
+
+    expect(voice.screen).toBe(true);
+    expect(voice.local.screenVideo).toBe(yeni.track);
+  });
+
+  it("yeni track'in ended olayi paylasimi durdurur", async () => {
+    const { session } = await paylasimda();
+    const yeni = dinlenebilirTrack();
+    ekranVer(session, yeni.track);
+    await session.degistirEkran();
+
+    yeni.tetikle();
+
+    expect(voice.screen).toBe(false);
+    expect(voice.local.screenVideo).toBeNull();
+  });
+
+  it("paylasim yokken degistirEkran seciciyi hic acmaz", async () => {
+    const { session } = kur();
+    await session.join();
+    const s = session as unknown as { media: { startScreen: unknown } };
+    const sahte = vi.fn();
+    s.media.startScreen = sahte;
+
+    await session.degistirEkran();
+
+    expect(sahte).not.toHaveBeenCalled();
+    expect(voice.screen).toBe(false);
   });
 });
