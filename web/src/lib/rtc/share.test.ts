@@ -1,42 +1,22 @@
 import { describe, it, expect } from "vitest";
-import { buildConstraints, systemAudioAvailable } from "./share";
-
-describe("systemAudioAvailable", () => {
-  it("tum ekranda sistem sesi alinabilir", () => {
-    expect(systemAudioAvailable("monitor")).toBe(true);
-  });
-  it("pencere yakalamada alinamaz (Windows kisiti)", () => {
-    expect(systemAudioAvailable("window")).toBe(false);
-  });
-});
+import { buildConstraints } from "./share";
 
 describe("buildConstraints", () => {
-  it("tum ekran + sistem sesi", () => {
-    expect(buildConstraints({ surface: "monitor", systemAudio: true })).toEqual({
-      video: { frameRate: 30, displaySurface: "monitor" },
-      audio: true,
-      systemAudio: "include",
-      surfaceSwitching: "include",
-    });
+  it("30 fps ister", () => {
+    expect((buildConstraints().video as { frameRate: number }).frameRate).toBe(30);
   });
 
-  it("sistem sesi kapaliyken audio false ve exclude", () => {
-    const c = buildConstraints({ surface: "monitor", systemAudio: false });
-    expect(c.audio).toBe(false);
-    expect((c as { systemAudio?: string }).systemAudio).toBe("exclude");
+  it("displaySurface VERMEZ: native secici on-filtrelenirse pencere paylasilamaz", () => {
+    expect(buildConstraints().video).not.toHaveProperty("displaySurface");
   });
 
-  it("pencere secildiginde sistem sesi istense bile kapatilir", () => {
-    const c = buildConstraints({ surface: "window", systemAudio: true });
-    expect(c.audio).toBe(false);
-    expect((c as { systemAudio?: string }).systemAudio).toBe("exclude");
-    expect((c.video as { displaySurface: string }).displaySurface).toBe("window");
+  it("sistem sesi kutusunu sunar, secimi kullaniciya birakir", () => {
+    const c = buildConstraints();
+    expect(c.audio).toBe(true);
+    expect(c.systemAudio).toBe("include");
   });
 
-  it("surfaceSwitching daima acik: kullanici yeniden baslatmadan yuzey degistirebilir", () => {
-    for (const surface of ["monitor", "window"] as const) {
-      const c = buildConstraints({ surface, systemAudio: false });
-      expect((c as { surfaceSwitching?: string }).surfaceSwitching).toBe("include");
-    }
+  it("surfaceSwitching acik: kullanici paylasimi yeniden baslatmadan yuzey degistirir", () => {
+    expect(buildConstraints().surfaceSwitching).toBe("include");
   });
 });

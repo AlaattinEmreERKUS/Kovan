@@ -13,14 +13,12 @@
   import RemoteAudio from "$lib/components/RemoteAudio.svelte";
   import VoiceStage from "$lib/components/VoiceStage.svelte";
   import ShareBanner from "$lib/components/ShareBanner.svelte";
-  import ShareDialog from "$lib/components/ShareDialog.svelte";
   import Icon from "$lib/components/Icon.svelte";
-  import type { ShareOptions } from "$lib/rtc/share";
 
-  let baglanti: Connection | null = null;
+  // $state sart: oturumu kuran efekt bunun atanmasini beklemek zorunda.
+  let baglanti = $state<Connection | null>(null);
   // $state sart: oturum atandiginda VoiceStage'in mixer prop'u guncellenmeli.
   let oturum = $state<VoiceSession | null>(null);
-  let paylasimDiyalogu = $state(false);
   let aktifSekme = $state<"metin" | "ses">("metin");
 
   async function katil() {
@@ -39,14 +37,11 @@
     if (!voice.joined && aktifSekme === "ses") aktifSekme = "metin";
   });
 
-  function ekranDugmesi() {
+  // Yuzey ve sistem sesi secimi tarayicinin kendi secicisinde yapiliyor;
+  // araya kendi diyalogumuzu koymuyoruz (share.ts).
+  async function ekranDugmesi() {
     if (voice.screen) oturum?.stopScreen();
-    else paylasimDiyalogu = true;
-  }
-
-  async function paylasimOnayi(o: ShareOptions) {
-    paylasimDiyalogu = false;
-    await oturum?.startScreen(o);
+    else await oturum?.startScreen();
   }
 
   onMount(() => {
@@ -57,10 +52,18 @@
 
   // selfId hello gelene kadar bilinmiyor; oturum store.me dolunca kurulur.
   $effect(() => {
-    if (!baglanti || !store.me || oturum) return;
+    // Bagimliliklar KOSULDAN ONCE okunur. "if (!baglanti || !store.me)"
+    // yazilirsa baglanti null oldugu an kisa devre olur, store.me hic okunmaz
+    // ve efekt hicbir bagimlilik kaydetmeden oler; hello gelse bile bir daha
+    // calismaz. Bugun onMount efektlerden once kostugu icin bu tetiklenmiyor,
+    // ama sirayi bozan tek bir duzenleme "katil dugmesi hicbir sey yapmiyor"
+    // demek olurdu -- sessiz ariza, gorunur hata yok.
+    const conn = baglanti;
+    const me = store.me;
+    if (!conn || !me || oturum) return;
     oturum = new VoiceSession({
-      conn: baglanti,
-      selfId: store.me.id,
+      conn,
+      selfId: me.id,
       apiUrl: PUBLIC_API_URL,
       token: localStorage.getItem("kovan_token") ?? "",
     });
@@ -90,7 +93,7 @@
     onToggleMute={() => oturum?.setMuted(!voice.muted)}
     onToggleDeafen={() => oturum?.setDeafened(!voice.deafened)}
     onToggleCamera={() => void oturum?.setCamera(!voice.camera)}
-    onToggleScreen={ekranDugmesi}
+    onToggleScreen={() => void ekranDugmesi()}
   />
   <main>
     <header class="ust">
@@ -118,7 +121,7 @@
         onToggleMute={() => oturum?.setMuted(!voice.muted)}
         onToggleDeafen={() => oturum?.setDeafened(!voice.deafened)}
         onToggleCamera={() => void oturum?.setCamera(!voice.camera)}
-        onToggleScreen={ekranDugmesi}
+        onToggleScreen={() => void ekranDugmesi()}
         onLeave={ayril}
       />
     {:else}
@@ -128,11 +131,6 @@
   </main>
   <MemberList />
   <RemoteAudio />
-  <ShareDialog
-    open={paylasimDiyalogu}
-    onConfirm={paylasimOnayi}
-    onCancel={() => (paylasimDiyalogu = false)}
-  />
 </div>
 
 <style>

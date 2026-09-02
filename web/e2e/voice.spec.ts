@@ -1,37 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
-
-const API = "http://127.0.0.1:8787";
-
-async function davetUret(kod: string) {
-  const res = await fetch(`${API}/api/dev/invite`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ code: kod }),
-  });
-  expect(res.ok).toBeTruthy();
-}
-
-async function kayitOl(page: Page, kod: string, kullanici: string) {
-  await page.goto("/giris");
-  await page.getByRole("button", { name: /Kayıt ol$/ }).click();
-  await page.getByPlaceholder("Davet kodu").fill(kod);
-  await page.getByPlaceholder("Görünen ad").fill(kullanici);
-  await page.getByPlaceholder("Kullanıcı adı").fill(kullanici.toLowerCase());
-  await page.getByPlaceholder("Parola").fill("kovan123");
-  await page.getByRole("button", { name: "Kayıt ol" }).click();
-  await expect(page.getByRole("log")).toBeVisible();
-}
-
-/** Sayfadaki tum RTCPeerConnection'lar connected olana kadar bekler. */
-async function baglandi(page: Page) {
-  await expect.poll(async () => page.evaluate(() => {
-    const k = (window as unknown as { __kovan?: { oturum: unknown } }).__kovan;
-    if (!k) return "kanca-yok";
-    const mesh = (k.oturum as { mesh?: { peers: Map<string, { o: { pc: RTCPeerConnection } }> } }).mesh;
-    if (!mesh || mesh.peers.size === 0) return "peer-yok";
-    return [...mesh.peers.values()].map((p) => p.o.pc.connectionState).join(",");
-  }), { timeout: 25_000 }).toBe("connected");
-}
+import { test, expect } from "@playwright/test";
+import { baglandi, davetUret, kayitOl } from "./yardim";
 
 test("iki kullanici ses kanalinda gercekten baglanir ve ses akar", async ({ browser }) => {
   const damga = Date.now();
@@ -93,7 +61,9 @@ test("iki kullanici ses kanalinda gercekten baglanir ve ses akar", async ({ brow
 
   // Mute karsi tarafta rozet olarak gorunur.
   await a.getByLabel("Mikrofonu kapat").click();
-  await expect(b.getByLabel("mikrofonu kapalı")).toBeVisible();
+  // Rozet iki yuzeyde birden var (kanal listesi + sahne karesi); kanal
+  // listesindekini kapsamla, yoksa strict mode iki eleman bulur.
+  await expect(b.getByRole("navigation").getByLabel("mikrofonu kapalı")).toBeVisible();
 
   // Ayrilinca listeden duser.
   await a.getByLabel("Odadan ayrıl").click();
@@ -128,12 +98,13 @@ test("sahne mesaj alaninin yerini alir, metin sekmesi sesten atmaz", async ({ br
   await expect(a.locator('[data-kare="kisi"]')).toHaveCount(0);
 
   // Sol alt panel gorunur ve mikrofon oradan kapanabilir.
-  await expect(a.getByLabel("Ses sahnesine dön").first()).toBeVisible();
+  // Sol alt panelin donus dugmesi; kanal listesindekinden AYRI etiketi var.
+  await expect(a.getByLabel("Ses bağlandı — sahneye dön")).toBeVisible();
   await a.getByLabel("Mikrofonu kapat").click();
   await expect(a.getByLabel("Mikrofonu aç")).toBeVisible();
 
   // Panelden sahneye don.
-  await a.getByLabel("Ses sahnesine dön").first().click();
+  await a.getByLabel("Ses bağlandı — sahneye dön").click();
   await expect(a.locator('[data-kare="kisi"][data-kendisi="true"]')).toBeVisible();
 
   // Cubuktaki ayril kanaldan cikarir ve metin sekmesine dondurur.
@@ -163,6 +134,10 @@ test("gorunum modu videosuz kareleri gizler ve secim kalici olur", async ({ brow
 
   // Secim localStorage'a yazildi: sayfa yenilenince korunur.
   await a.reload();
+  // Ses oturumu hello gelince kuruluyor. Mesaj listesi BOSKEN de gorunur,
+  // yani onu beklemek yetmez: mesajlarin gelmesi hello'nun ulastiginin
+  // kanitidir. Erken tiklamak sessizce hicbir sey yapmaz.
+  await expect(a.locator("article").first()).toBeVisible({ timeout: 10_000 });
   await a.getByLabel("Ses kanalına katıl").click();
   await expect(a.getByText("Kimsenin kamerası açık değil")).toBeVisible();
 

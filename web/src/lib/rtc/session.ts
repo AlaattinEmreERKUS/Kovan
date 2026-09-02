@@ -5,7 +5,6 @@ import { LocalMedia } from "./media";
 import { Mesh } from "./mesh";
 import { Peer, type SignalPayload, type TrackSlot } from "./peer";
 import { SpeakingDetector } from "./speaking";
-import type { ShareOptions } from "./share";
 import { ScreenAudioMixer } from "./gain";
 
 export interface SessionOptions {
@@ -157,12 +156,12 @@ export class VoiceSession {
     this.publish();
   }
 
-  async startScreen(o: ShareOptions): Promise<void> {
+  async startScreen(): Promise<void> {
     if (voice.screen) return;
     let video: MediaStreamTrack;
     let audio: MediaStreamTrack | null;
     try {
-      ({ video, audio } = await this.media.startScreen(o));
+      ({ video, audio } = await this.media.startScreen());
     } catch (e) {
       // NotAllowedError = kullanici native secicide vazgecti. Hata
       // GOSTERILMEZ; vazgecmek bir ariza degil (spec 8.1 adim 3).

@@ -1,27 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
-
-const API = "http://127.0.0.1:8787";
-
-async function davetUret(kod: string) {
-  // wrangler dev üzerinde çalışan DO'ya doğrudan davet ekler.
-  const res = await fetch(`${API}/api/dev/invite`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ code: kod }),
-  });
-  expect(res.ok).toBeTruthy();
-}
-
-async function kayitOl(page: Page, kod: string, kullanici: string) {
-  await page.goto("/giris");
-  await page.getByRole("button", { name: /Kayıt ol$/ }).click();
-  await page.getByPlaceholder("Davet kodu").fill(kod);
-  await page.getByPlaceholder("Görünen ad").fill(kullanici);
-  await page.getByPlaceholder("Kullanıcı adı").fill(kullanici.toLowerCase());
-  await page.getByPlaceholder("Parola").fill("kovan123");
-  await page.getByRole("button", { name: "Kayıt ol" }).click();
-  await expect(page.getByRole("log")).toBeVisible();
-}
+import { test, expect } from "@playwright/test";
+import { davetUret, kayitOl } from "./yardim";
 
 test("iki kullanici gercek zamanli mesajlasir ve tepki verir", async ({ browser }) => {
   const damga = Date.now();

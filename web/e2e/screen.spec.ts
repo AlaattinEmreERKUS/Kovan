@@ -1,26 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
-
-const API = "http://127.0.0.1:8787";
-
-async function davetUret(kod: string) {
-  const res = await fetch(`${API}/api/dev/invite`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ code: kod }),
-  });
-  expect(res.ok).toBeTruthy();
-}
-
-async function kayitOl(page: Page, kod: string, kullanici: string) {
-  await page.goto("/giris");
-  await page.getByRole("button", { name: /Kayıt ol$/ }).click();
-  await page.getByPlaceholder("Davet kodu").fill(kod);
-  await page.getByPlaceholder("Görünen ad").fill(kullanici);
-  await page.getByPlaceholder("Kullanıcı adı").fill(kullanici.toLowerCase());
-  await page.getByPlaceholder("Parola").fill("kovan123");
-  await page.getByRole("button", { name: "Kayıt ol" }).click();
-  await expect(page.getByRole("log")).toBeVisible();
-}
+import { test, expect } from "@playwright/test";
+import { davetUret, kayitOl } from "./yardim";
 
 /**
  * Native seciciyi acamayiz (headless'ta zaten yok). getDisplayMedia'yi canvas +
@@ -74,12 +53,10 @@ test("ekran paylasimi izleyiciye ayri yuvalardan ulasir", async ({ browser }) =>
   await b.getByLabel("Ses kanalına katıl").click();
   await expect(a.getByText("2/4")).toBeVisible();
 
-  // On-diyalog bizim arayuzumuz, native secici degil.
+  // Kendi on-diyalogumuz yok: dugme dogrudan native seciciyi acar (share.ts).
+  // Yuzey ve sistem sesi secimi orada yapilir; sahte getDisplayMedia
+  // constraint'teki audio:true'yu "kullanici kutuyu isaretledi" gibi okur.
   await a.getByLabel("Ekran paylaş").click();
-  await expect(a.getByRole("dialog", { name: "Ekran paylaşımı ayarları" })).toBeVisible();
-  await a.getByLabel("Tüm ekran").check();
-  await a.getByLabel("Sistem sesini de paylaş").check();
-  await a.getByRole("button", { name: "Devam" }).click();
 
   // Paylasan tarafta Kovan seridi gorunur (Chromium cubugunun kopyasi degil).
   await expect(a.getByRole("status")).toContainText("Ekranını paylaşıyorsun");
@@ -89,7 +66,19 @@ test("ekran paylasimi izleyiciye ayri yuvalardan ulasir", async ({ browser }) =>
   await expect(b.getByLabel("ekran paylaşıyor")).toBeVisible({ timeout: 15_000 });
   await expect(b.locator("figure.ekran video")).toBeVisible({ timeout: 15_000 });
 
-  // Track'ler DOGRU YUVALARDA: screenVideo ve screenAudio dolu, mikrofon ayri.
+  // Ekran karesi izgaranin BASINDA: dikkatin merkezi paylasilan ekrandir.
+  await expect(b.locator('[data-kare]').first()).toHaveAttribute("data-kare", "ekran");
+  await expect(a.locator('[data-kare]').first()).toHaveAttribute("data-kare", "ekran");
+
+  // Paylasan taraf kendi ekranini da gorur (sonsuz ayna bilerek serbest),
+  // ama kendi ekran sesini kisacak kaydirici cizilmez.
+  await expect(a.locator('[data-kare="ekran"]')).toHaveCount(1);
+  await expect(a.getByLabel(/ekran ses seviyesi/)).toHaveCount(0);
+
+  // Track'ler DOGRU YUVALARDA. Dort yuva da dolu: ontrack her m-line icin
+  // atesleniyor ve track'ler artik geldikleri anda saklaniyor (rtc/session.ts).
+  // Onemli olan ESLEMENIN dogrulugu -- ekran videosu cam yuvasina, ekran sesi
+  // mikrofon yuvasina dusmemeli.
   await expect.poll(async () => b.evaluate(() => {
     const v = (window as unknown as { __kovan: { voice: { remote: Map<string, {
       mic: MediaStreamTrack | null; cam: MediaStreamTrack | null;
@@ -103,7 +92,13 @@ test("ekran paylasimi izleyiciye ayri yuvalardan ulasir", async ({ browser }) =>
       t.screenVideo ? "sv" : "-",
       t.screenAudio ? "sa" : "-",
     ].join(",");
-  }), { timeout: 20_000 }).toBe("mic,-,sv,sa");
+  }), { timeout: 20_000 }).toBe("mic,cam,sv,sa");
+
+  // Dolu cam yuvasi kare CIZDIRMEZ: karsi tarafin kamerasi kapali oldugu
+  // surece (VoiceMember.camera=false) kisi karesinde video elementi olmaz.
+  // Plan 2'de "herkese bos siyah kare" hatasini uretmisti; koruma artik
+  // gorunurluk katmaninda (lib/stage.ts).
+  await expect(b.locator('[data-kare="kisi"] video')).toHaveCount(0);
 
   // Kaydiriciyi 0'a cekmek ekran sesini susturur; mikrofon etkilenmez.
   await b.getByLabel(/ekran ses seviyesi/).fill("0");
@@ -124,6 +119,44 @@ test("ekran paylasimi izleyiciye ayri yuvalardan ulasir", async ({ browser }) =>
   // "Ekran paylasimini durdur" da "Durdur" ile eslesiyor.
   await a.getByRole("status").getByRole("button", { name: "Durdur", exact: true }).click();
   await expect(b.getByLabel("ekran paylaşıyor")).toBeHidden({ timeout: 15_000 });
+
+  await ctxA.close();
+  await ctxB.close();
+});
+
+test("paylasim bitince ekran karesi kalkar, kisi kareleri kalir", async ({ browser }) => {
+  const damga = Date.now();
+  await davetUret(`S3-${damga}`);
+  await davetUret(`S4-${damga}`);
+
+  const ctxA = await browser.newContext();
+  const ctxB = await browser.newContext();
+  await ctxA.addInitScript(SAHTE_EKRAN);
+  const a = await ctxA.newPage();
+  const b = await ctxB.newPage();
+
+  await kayitOl(a, `S3-${damga}`, `Biten${damga}`);
+  await kayitOl(b, `S4-${damga}`, `Bakan${damga}`);
+
+  await a.getByLabel("Ses kanalına katıl").click();
+  await b.getByLabel("Ses kanalına katıl").click();
+  await expect(a.getByText("2/4")).toBeVisible();
+
+  // Paylasim oncesi: yalniz iki kisi karesi.
+  await expect(b.locator('[data-kare="kisi"]')).toHaveCount(2);
+  await expect(b.locator('[data-kare="ekran"]')).toHaveCount(0);
+
+  // Secim native secicide yapilir; on-diyalog yok (share.ts).
+  await a.getByLabel("Ekran paylaş").click();
+
+  await expect(b.locator('[data-kare="ekran"]')).toHaveCount(1, { timeout: 15_000 });
+  await expect(b.locator('[data-kare="kisi"]')).toHaveCount(2);
+
+  // Serit sahnedeyken de gorunur; durdurma dugmesi oradan calisir.
+  await a.getByRole("status").getByRole("button", { name: "Durdur", exact: true }).click();
+
+  await expect(b.locator('[data-kare="ekran"]')).toHaveCount(0, { timeout: 15_000 });
+  await expect(b.locator('[data-kare="kisi"]')).toHaveCount(2);
 
   await ctxA.close();
   await ctxB.close();

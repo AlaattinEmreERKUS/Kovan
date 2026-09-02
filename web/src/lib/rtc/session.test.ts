@@ -193,7 +193,7 @@ describe("VoiceSession ekran paylasimi", () => {
     await session.join();
     const s = session as unknown as { media: { startScreen: unknown } };
     s.media.startScreen = vi.fn(async () => ({ video: sahteTrack("video"), audio: sahteTrack("audio") }));
-    await session.startScreen({ surface: "monitor", systemAudio: true });
+    await session.startScreen();
     expect(voice.screen).toBe(true);
     expect(voice.screenAudio).toBe(true);
     expect(gonderilen.at(-1)).toMatchObject({ screen: true, screenAudio: true });
@@ -209,7 +209,7 @@ describe("VoiceSession ekran paylasimi", () => {
     const s = session as unknown as { media: { startScreen: unknown } };
     s.media.startScreen = vi.fn(async () => ({ video, audio: null }));
 
-    await session.startScreen({ surface: "monitor", systemAudio: false });
+    await session.startScreen();
     expect(voice.screen).toBe(true);
 
     dinleyiciler.forEach((fn) => fn());   // kullanici Chromium cubuguna basti
@@ -224,7 +224,7 @@ describe("VoiceSession ekran paylasimi", () => {
     s.media.startScreen = vi.fn(async () => {
       throw new DOMException("iptal", "NotAllowedError");
     });
-    await session.startScreen({ surface: "monitor", systemAudio: true });
+    await session.startScreen();
     expect(voice.screen).toBe(false);
     expect(voice.error).toBeNull();
   });
@@ -324,14 +324,14 @@ describe("voice.local yerel track yuzeyi", () => {
   it("ekran paylasimi baslayinca local.screenVideo dolar", async () => {
     const { session } = kurEkranli();
     await session.join();
-    await session.startScreen({ surface: "monitor", systemAudio: false });
+    await session.startScreen();
     expect(voice.local.screenVideo).not.toBeNull();
   });
 
   it("ekran paylasimi durunca local.screenVideo bosalir", async () => {
     const { session } = kurEkranli();
     await session.join();
-    await session.startScreen({ surface: "monitor", systemAudio: false });
+    await session.startScreen();
     session.stopScreen();
     expect(voice.local.screenVideo).toBeNull();
   });
@@ -340,7 +340,7 @@ describe("voice.local yerel track yuzeyi", () => {
     const { session } = kurEkranli();
     await session.join();
     await session.setCamera(true);
-    await session.startScreen({ surface: "monitor", systemAudio: false });
+    await session.startScreen();
     session.leave();
     expect(voice.local).toEqual({ cam: null, screenVideo: null });
   });

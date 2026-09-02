@@ -1,4 +1,4 @@
-import { buildConstraints, type ShareOptions } from "./share";
+import { buildConstraints } from "./share";
 
 export interface MediaDeps {
   getUserMedia(c: MediaStreamConstraints): Promise<MediaStream>;
@@ -64,14 +64,14 @@ export class LocalMedia {
   }
 
   /**
-   * Native secici acilir (secici DEGISTIRILEMEZ, spec 8.1 kisit 1);
-   * constraint'ler on-diyalogdan gelir ve seciciyi on-filtreler.
+   * Native secici acilir (secici DEGISTIRILEMEZ, spec 8.1 kisit 1). Yuzey ve
+   * sistem sesi secimi orada yapilir; kendi on-diyalogumuz yok (share.ts).
    */
-  async startScreen(o: ShareOptions): Promise<{ video: MediaStreamTrack; audio: MediaStreamTrack | null }> {
-    const stream = await this.deps.getDisplayMedia(buildConstraints(o));
+  async startScreen(): Promise<{ video: MediaStreamTrack; audio: MediaStreamTrack | null }> {
+    const stream = await this.deps.getDisplayMedia(buildConstraints());
     this.screenVideo = stream.getVideoTracks()[0];
-    // Sistem sesi istendi diye track GELECEK diye bir sey yok: kullanici
-    // native secicide ses kutusunu kapatmis olabilir.
+    // Ses kutusu native secicide isaretlenmemis olabilir; o zaman audio
+    // track hic gelmez ve serit "sistem sesi acik" yazmaz.
     this.screenAudio = stream.getAudioTracks()[0] ?? null;
     return { video: this.screenVideo, audio: this.screenAudio };
   }

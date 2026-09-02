@@ -29,12 +29,12 @@
     {#each voice.members as u (u.userId)}
       <li class:konusuyor={voice.speaking.has(u.userId)}>
         <span class="ad">{adlar.get(u.userId) ?? "…"}</span>
-        {#if u.muted}<span class="rozet kapali" aria-label="mikrofonu kapalı"><Icon ad="mik-kapali" boyut={11} /></span>{/if}
-        {#if u.deafened}<span class="rozet kapali" aria-label="kulaklığı kapalı"><Icon ad="kulaklik-kapali" boyut={11} /></span>{/if}
-        {#if u.camera}<span class="rozet acik" aria-label="kamerası açık"><Icon ad="kamera" boyut={11} /></span>{/if}
-        {#if u.screen}<span class="rozet acik" aria-label="ekran paylaşıyor"><Icon ad="ekran" boyut={11} /></span>{/if}
+        {#if u.muted}<span class="rozet kapali" role="img" aria-label="mikrofonu kapalı"><Icon ad="mik-kapali" boyut={11} /></span>{/if}
+        {#if u.deafened}<span class="rozet kapali" role="img" aria-label="kulaklığı kapalı"><Icon ad="kulaklik-kapali" boyut={11} /></span>{/if}
+        {#if u.camera}<span class="rozet acik" role="img" aria-label="kamerası açık"><Icon ad="kamera" boyut={11} /></span>{/if}
+        {#if u.screen}<span class="rozet acik" role="img" aria-label="ekran paylaşıyor"><Icon ad="ekran" boyut={11} /></span>{/if}
         {#if voice.connection.get(u.userId) === "failed"}
-          <span class="rozet uyari" aria-label="bağlantı kurulamadı"><Icon ad="uyari" boyut={11} /></span>
+          <span class="rozet uyari" role="img" aria-label="bağlantı kurulamadı"><Icon ad="uyari" boyut={11} /></span>
         {/if}
       </li>
     {/each}

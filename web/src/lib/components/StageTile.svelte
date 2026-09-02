@@ -28,12 +28,12 @@
   <figcaption>
     <span class="ad">{kare.ad}{kare.kendisi ? " (sen)" : ""}</span>
     {#if kare.deafened}
-      <span class="rozet kapali" title="Kulaklığı kapalı"><Icon ad="kulaklik-kapali" boyut={13} /></span>
+      <span class="rozet kapali" role="img" aria-label="kulaklığı kapalı" title="Kulaklığı kapalı"><Icon ad="kulaklik-kapali" boyut={13} /></span>
     {:else if kare.muted}
-      <span class="rozet kapali" title="Mikrofonu kapalı"><Icon ad="mik-kapali" boyut={13} /></span>
+      <span class="rozet kapali" role="img" aria-label="mikrofonu kapalı" title="Mikrofonu kapalı"><Icon ad="mik-kapali" boyut={13} /></span>
     {/if}
     {#if kare.kopuk}
-      <span class="rozet uyari" title="Bağlantı kurulamadı"><Icon ad="uyari" boyut={13} /></span>
+      <span class="rozet uyari" role="img" aria-label="bağlantı kurulamadı" title="Bağlantı kurulamadı"><Icon ad="uyari" boyut={13} /></span>
     {/if}
   </figcaption>
 </figure>

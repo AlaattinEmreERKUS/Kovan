@@ -14,7 +14,7 @@
 
 <div class="panel">
   <div class="ust">
-    <button class="donus" aria-label="Ses sahnesine dön" onclick={onSahneyeDon}>
+    <button class="donus" aria-label="Ses bağlandı — sahneye dön" onclick={onSahneyeDon}>
       <span class="nokta" aria-hidden="true"></span>
       <span class="metin">
         <span class="durum">Ses bağlandı</span>

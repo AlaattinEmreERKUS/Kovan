@@ -97,7 +97,7 @@ describe("LocalMedia ekran paylasimi", () => {
 
   it("sistem sesi acikken iki track doner", async () => {
     const { media, video, audio } = ekranKur(true);
-    const sonuc = await media.startScreen({ surface: "monitor", systemAudio: true });
+    const sonuc = await media.startScreen();
     expect(sonuc.video).toBe(video);
     expect(sonuc.audio).toBe(audio);
     expect(media.screenVideo).toBe(video);
@@ -106,21 +106,21 @@ describe("LocalMedia ekran paylasimi", () => {
 
   it("ses track'i yoksa audio null olur, patlamaz", async () => {
     const { media } = ekranKur(false);
-    const sonuc = await media.startScreen({ surface: "window", systemAudio: false });
+    const sonuc = await media.startScreen();
     expect(sonuc.audio).toBeNull();
   });
 
-  it("constraint on-diyalogdan uretilir", async () => {
+  it("secim native seciciye birakilir: displaySurface gonderilmez", async () => {
     const { media, deps } = ekranKur(true);
-    await media.startScreen({ surface: "window", systemAudio: true });
+    await media.startScreen();
     const c = (deps.getDisplayMedia as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(c.video.displaySurface).toBe("window");
-    expect(c.audio).toBe(false); // pencerede sistem sesi yok
+    expect(c.video).not.toHaveProperty("displaySurface");
+    expect(c.audio).toBe(true); // ses kutusunu SUNAR; isaretlemek kullanicinin
   });
 
   it("stopScreen iki track'i de durdurur", async () => {
     const { media, video, audio } = ekranKur(true);
-    await media.startScreen({ surface: "monitor", systemAudio: true });
+    await media.startScreen();
     media.stopScreen();
     expect(video.stop).toHaveBeenCalled();
     expect(audio.stop).toHaveBeenCalled();
