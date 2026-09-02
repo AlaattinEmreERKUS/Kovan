@@ -197,3 +197,41 @@ describe("VoiceSession ekran paylasimi", () => {
     expect(voice.error).toBeNull();
   });
 });
+
+describe("VoiceSession baglanti durumu", () => {
+  it("failed durumu kullanici basina store'a yazilir", async () => {
+    const { session, conn, pcler } = kur();
+    await session.join();
+    conn.onVoiceMembers!([{ userId: "u1" }, { userId: "u2" }, { userId: "u3" }]);
+
+    // u1 icin acilan baglanti coker.
+    pcler[0].connectionState = "failed";
+    pcler[0].onconnectionstatechange!();
+
+    expect([...voice.connection.values()]).toContain("failed");
+    // Digeri etkilenmez: uyari yalnizca kopan kisinin yaninda cikmali.
+    expect([...voice.connection.values()].filter((d) => d === "failed")).toHaveLength(1);
+  });
+
+  it("uye ayrilinca durum kaydi temizlenir", async () => {
+    const { session, conn, pcler } = kur();
+    await session.join();
+    conn.onVoiceMembers!([{ userId: "u1" }, { userId: "u2" }]);
+    pcler[0].connectionState = "failed";
+    pcler[0].onconnectionstatechange!();
+    expect(voice.connection.size).toBe(1);
+
+    conn.onVoiceMembers!([{ userId: "u2" }]);
+    expect(voice.connection.size).toBe(0);
+  });
+
+  it("leave tum durum kayitlarini siler", async () => {
+    const { session, conn, pcler } = kur();
+    await session.join();
+    conn.onVoiceMembers!([{ userId: "u1" }, { userId: "u2" }]);
+    pcler[0].connectionState = "connected";
+    pcler[0].onconnectionstatechange!();
+    session.leave();
+    expect(voice.connection.size).toBe(0);
+  });
+});

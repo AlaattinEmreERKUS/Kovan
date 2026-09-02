@@ -82,6 +82,7 @@ export class VoiceSession {
         voice.speaking.delete(userId);
         this.speaking?.unwatch(userId);
         this.mixer?.detach(userId);
+        voice.connection.delete(userId);
       },
     });
 
@@ -113,6 +114,7 @@ export class VoiceSession {
     voice.screenAudio = false;
     voice.remote.clear();
     voice.speaking.clear();
+    voice.connection.clear();
   }
 
   setMuted(muted: boolean): void {
@@ -215,6 +217,7 @@ export class VoiceSession {
       pc,
       sendSignal: (data) => this.o.conn.send({ t: "signal", target: userId, data }),
       onTrack: (slot, track) => this.onRemoteTrack(userId, slot, track),
+      onStateChange: (durum) => voice.connection.set(userId, durum),
     });
 
     // Baglanti kurulur kurulmaz yerel track'ler yerine oturur. replaceTrack

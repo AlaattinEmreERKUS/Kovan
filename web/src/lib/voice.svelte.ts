@@ -32,6 +32,12 @@ export const voice = $state({
   /** Su an konusan kullanicilar. Yerel olcum, sunucuya GITMEZ. */
   speaking: new SvelteSet<string>(),
   remote: new SvelteMap<string, RemoteTracks>(),
+  /**
+   * userId -> RTCPeerConnection durumu. "failed" kalici bir arizadir: ICE
+   * hicbir yol bulamadi. TURN olmadan simetrik NAT arkasindaki kullanicida
+   * tam olarak bu olur ve arayuz susarsa kullanici mikrofonunu suclar.
+   */
+  connection: new SvelteMap<string, RTCPeerConnectionState>(),
   error: null as string | null,
 });
 
@@ -57,5 +63,6 @@ export function resetVoice(): void {
   voice.screenAudio = false;
   voice.speaking.clear();
   voice.remote.clear();
+  voice.connection.clear();
   voice.error = null;
 }

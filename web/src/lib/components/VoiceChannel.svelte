@@ -5,6 +5,12 @@
   let { onJoin, onLeave }: { onJoin: () => void; onLeave: () => void } = $props();
 
   const adlar = $derived(new Map(store.members.map((m) => [m.id, m.displayName])));
+
+  // "failed" = ICE hicbir yol bulamadi, kalici. Kullanici bunu gormezse
+  // mikrofonunu suclar; gercek sebep agin dogrudan baglantiya izin vermemesi.
+  const kopuklar = $derived(
+    voice.members.filter((m) => voice.connection.get(m.userId) === "failed")
+  );
 </script>
 
 <div class="ses">
@@ -26,9 +32,20 @@
         {#if u.deafened}<span class="rozet" aria-label="kulaklığı kapalı">🎧</span>{/if}
         {#if u.camera}<span class="rozet" aria-label="kamerası açık">📷</span>{/if}
         {#if u.screen}<span class="rozet" aria-label="ekran paylaşıyor">🖥</span>{/if}
+        {#if voice.connection.get(u.userId) === "failed"}
+          <span class="rozet uyari" aria-label="bağlantı kurulamadı">⚠</span>
+        {/if}
       </li>
     {/each}
   </ul>
+
+  {#if kopuklar.length > 0}
+    <p class="hata" role="alert">
+      {kopuklar.map((m) => adlar.get(m.userId) ?? "…").join(", ")} ile bağlantı
+      kurulamadı. Ağın doğrudan bağlantıya izin vermiyor olabilir; kablolu
+      bağlantı veya farklı bir ağ deneyin.
+    </p>
+  {/if}
 
   {#if voice.error}
     <p class="hata" role="alert">{voice.error}</p>
@@ -49,5 +66,6 @@
   /* Konusma gostergesi spec 9'daki tek glow kullanimlarindan biri. */
   li.konusuyor .ad { color: var(--bal-sicak); text-shadow: 0 0 6px var(--bal-zemin); }
   .rozet { font-size: 10px; }
+  .rozet.uyari { color: var(--tehlike); }
   .hata { margin: 8px 6px 0; font-size: 11px; color: var(--tehlike); line-height: 1.4; }
 </style>
