@@ -121,3 +121,46 @@ describe("voice.state", () => {
     expect((await bekle(wsA, "voice.members")).members[0].muted).toBe(true);
   });
 });
+
+describe("baglanti kopmasi", () => {
+  beforeEach(() => reset());
+
+  it("kopan socket ses listesinden dusurulur", async () => {
+    const wsA = await baglan(await kayit("A1", "napol"));
+    const helloA = await bekle(wsA, "hello");
+    wsA.send(JSON.stringify({ t: "voice.join" }));
+    await bekle(wsA, "voice.members");
+
+    const wsB = await baglan(await kayit("A2", "denis"));
+    const helloB = await bekle(wsB, "hello");
+    wsB.send(JSON.stringify({ t: "voice.join" }));
+    await bekle(wsB, "voice.members");
+    await bekle(wsA, "voice.members");
+
+    const bekleyen = bekle(wsA, "voice.members");
+    wsB.close();
+
+    const kalanlar = (await bekleyen).members.map((m) => m.userId);
+    expect(kalanlar).toEqual([helloA.me.id]);
+    expect(kalanlar).not.toContain(helloB.me.id);
+  });
+
+  it("seste olmayan socket kopunca ses yayini yapilmaz", async () => {
+    const wsA = await baglan(await kayit("A1", "napol"));
+    await bekle(wsA, "hello");
+    wsA.send(JSON.stringify({ t: "voice.join" }));
+    await bekle(wsA, "voice.members");
+
+    let sesYayiniGeldi = false;
+    wsA.addEventListener("message", (e) => {
+      if (JSON.parse(e.data as string).t === "voice.members") sesYayiniGeldi = true;
+    });
+
+    const wsB = await baglan(await kayit("A2", "denis"));
+    await bekle(wsB, "hello");
+    wsB.close();
+    await bekle(wsA, "presence.update");
+
+    expect(sesYayiniGeldi).toBe(false);
+  });
+});

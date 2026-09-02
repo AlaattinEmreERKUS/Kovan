@@ -1,4 +1,5 @@
 import { env, runInDurableObject } from "cloudflare:test";
+import { writeState } from "../src/sockets";
 import type { ServerEvent } from "@shared/protocol";
 
 const BASE = "https://kovan.test";
@@ -13,6 +14,10 @@ export const stub = () => env.KOVAN.get(env.KOVAN.idFromName("kovan-main"));
 export async function reset(codes: string[] = ["A1", "A2"]): Promise<void> {
   await runInDurableObject(stub(), (_i, state) => {
     for (const ws of state.getWebSockets()) {
+      // Once sesten dusur, sonra kapat. Kapanis isleyicisi seste olan bir
+      // socket icin voice.members yayinlar; bu yayin gecikmeli calisip bir
+      // SONRAKI testin kuyruguna bayat liste dusuruyordu.
+      writeState(ws, { inVoice: false });
       ws.close(1000, "test reset");
     }
     for (const t of ["users", "invites", "sessions", "messages", "reactions"]) {
@@ -22,6 +27,17 @@ export async function reset(codes: string[] = ["A1", "A2"]): Promise<void> {
       state.storage.sql.exec("INSERT INTO invites (code) VALUES (?)", c);
     }
   });
+
+  // Kapanis isleyicileri ASENKRON calisir: reset dondukten sonra tetiklenen
+  // bir webSocketClose, bir SONRAKI testin taze socketine presence.update ya
+  // da voice.members dusuruyordu ve bekle() bayat olayi yakaliyordu.
+  // Socketler gercekten gidene kadar bekle.
+  for (let i = 0; i < 100; i++) {
+    const kalan = await runInDurableObject(stub(), (_i, state) => state.getWebSockets().length);
+    if (kalan === 0) return;
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  throw new Error("reset(): socketler kapanmadi");
 }
 
 export async function kayit(code: string, username: string): Promise<string> {

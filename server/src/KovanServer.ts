@@ -270,10 +270,17 @@ export class KovanServer implements DurableObject {
   }
 
   async webSocketClose(ws: WebSocket): Promise<void> {
-    const { userId } = readState(ws);
+    const state = readState(ws);
     // Bu kullanıcının başka açık socket'i yoksa offline sayılır.
-    if (socketsOf(this.ctx, userId).filter((s) => s !== ws).length === 0) {
-      broadcast(this.ctx, { t: "presence.update", userId, online: false }, ws);
+    if (socketsOf(this.ctx, state.userId).filter((s) => s !== ws).length === 0) {
+      broadcast(this.ctx, { t: "presence.update", userId: state.userId, online: false }, ws);
+    }
+    // Kapanan socket getWebSockets() icinde bir sure daha gorunebilir. Listeyi
+    // broadcastVoice() ile turetirsek ayrilan kisi listede kalir ve digerleri
+    // hic gelmeyecek bir offer bekler. Bu yuzden onu ACIKCA eliyoruz.
+    if (state.inVoice) {
+      const kalan = this.ctx.getWebSockets().filter((s) => s !== ws).map(readState);
+      broadcast(this.ctx, { t: "voice.members", members: voiceMembers(kalan) }, ws);
     }
   }
 

@@ -2,6 +2,7 @@ import { runInDurableObject } from "cloudflare:test";
 import { describe, it, expect, beforeEach } from "vitest";
 import { baglan, bekle, kayit, reset, stub } from "./helpers";
 import { onlineUserIds, readState, writeState } from "../src/sockets";
+import { voiceMembers } from "../src/voice";
 
 describe("hibernation guvenligi (R3)", () => {
   beforeEach(() => reset());
@@ -38,6 +39,28 @@ describe("hibernation guvenligi (R3)", () => {
       expect(durum.inVoice).toBe(true);
       expect(durum.muted).toBe(true);
       expect(durum.username).toBe("napol");
+    });
+  });
+
+  it("ses uyeligi instance bellegi degil attachment kaynaklidir (R3)", async () => {
+    const wsA = await baglan(await kayit("A1", "napol"));
+    const helloA = await bekle(wsA, "hello");
+    wsA.send(JSON.stringify({ t: "voice.join" }));
+    await bekle(wsA, "voice.members");
+    wsA.send(JSON.stringify({
+      t: "voice.state", muted: true, deafened: false,
+      camera: false, screen: true, screenAudio: true,
+    }));
+    await bekle(wsA, "voice.members");
+
+    // Ayri bir calistirma: instance alanina degil attachment a bakiliyor.
+    // DO uyutulup uyandirildiginda hayatta kalan tek sey budur.
+    await runInDurableObject(stub(), (_i, state) => {
+      const uyeler = voiceMembers(state.getWebSockets().map(readState));
+      expect(uyeler).toHaveLength(1);
+      expect(uyeler[0]).toMatchObject({
+        userId: helloA.me.id, muted: true, screen: true, screenAudio: true,
+      });
     });
   });
 });
