@@ -55,3 +55,21 @@ export function sendTo(ctx: DurableObjectState, userId: string, event: ServerEve
     } catch { /* yukarıdaki gerekçe */ }
   }
 }
+
+/**
+ * Sinyali hedefin YALNIZCA ses kanalindaki socket'lerine gonderir. Ayni
+ * kullanicinin sesten bagimsiz ikinci sekmesine offer gitmemeli: o sekmede
+ * mesh yok, cevap donmez ve gonderen tarafta yarim baglanti asili kalir.
+ */
+export function sendToVoice(ctx: DurableObjectState, userId: string, event: ServerEvent): void {
+  const payload = JSON.stringify(event);
+  for (const ws of ctx.getWebSockets()) {
+    const s = readState(ws);
+    if (s.userId !== userId || !s.inVoice) continue;
+    try {
+      ws.send(payload);
+    } catch {
+      // Kapanmis socket. getWebSockets() bir sonraki turda temizler.
+    }
+  }
+}

@@ -1,12 +1,12 @@
 import { ensureSchema } from "./schema";
 import type { Env } from "./worker";
 import { hashPassword, hashToken, newSalt, newSessionToken, timingSafeEqual } from "./auth";
-import { type SocketState, broadcast, onlineUserIds, readState, socketsOf, writeState } from "./sockets";
+import { type SocketState, broadcast, onlineUserIds, readState, sendToVoice, socketsOf, writeState } from "./sockets";
 import {
   MAX_CONTENT, MAX_EMOJI, insertMessage, messageExists, messagesAfter,
   reactionsFor, recentMessages, toggleReaction,
 } from "./messages";
-import { VOICE_CAP, sanitizeVoiceFlags, voiceFull, voiceMembers } from "./voice";
+import { MAX_SIGNAL, VOICE_CAP, sanitizeVoiceFlags, voiceFull, voiceMembers } from "./voice";
 import type { ClientEvent, ServerEvent, User } from "@shared/protocol";
 
 interface UserRow extends Record<string, SqlStorageValue> {
@@ -178,6 +178,31 @@ export class KovanServer implements DurableObject {
         }
         writeState(ws, flags);
         this.broadcastVoice();
+        return;
+      }
+      case "signal": {
+        if (!state.inVoice) {
+          return this.fail(ws, "seste_degil", "Önce ses kanalına katılın.");
+        }
+        // raw uzunlugu JSON un tamamini olcer; data yeniden serilestirilmez,
+        // boylece dev bir paket parse sonrasi ikinci kez kopyalanmaz.
+        if (raw.length > MAX_SIGNAL) {
+          return this.fail(ws, "buyuk_sinyal", "Sinyal paketi çok büyük.");
+        }
+        const ham = event as { target?: unknown; data?: unknown };
+        if (typeof ham.target !== "string" || ham.target.length === 0 || ham.target === state.userId) {
+          return this.fail(ws, "gecersiz_hedef", "Sinyal hedefi geçersiz.");
+        }
+        if (ham.data === undefined) {
+          return this.fail(ws, "bos_sinyal", "Sinyal gövdesi boş.");
+        }
+        const hedefSeste = this.allSocketStates()
+          .some((s) => s.userId === ham.target && s.inVoice);
+        if (!hedefSeste) {
+          return this.fail(ws, "hedef_seste_degil", "Hedef ses kanalında değil.");
+        }
+        // Sunucu SDP nin icine BAKMAZ; paket oldugu gibi gecer (spec 5).
+        sendToVoice(this.ctx, ham.target, { t: "signal", from: state.userId, data: ham.data });
         return;
       }
       case "sync": {
