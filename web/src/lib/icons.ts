@@ -51,6 +51,12 @@ export const IKONLAR = {
     '<path d="M11.2 4.4 6.6 8.2H3.4a1 1 0 0 0-1 1v5.6a1 1 0 0 0 1 1h3.2l4.6 3.8a1 1 0 0 0 1.6-.8V5.2a1 1 0 0 0-1.6-.8Z" fill="currentColor"/>' +
     '<path d="M16.4 8.6a4.6 4.6 0 0 1 0 6.8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
     '<path d="M19.4 5.8a8.6 8.6 0 0 1 0 12.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  "buyut":
+    '<path d="M4 3.5h5.4a1 1 0 1 1 0 2H6.9l3.8 3.8a1 1 0 0 1-1.4 1.4L5.5 6.9v2.5a1 1 0 0 1-2 0V4a.5.5 0 0 1 .5-.5Z" fill="currentColor"/>' +
+    '<path d="M20 20.5h-5.4a1 1 0 1 1 0-2h2.5l-3.8-3.8a1 1 0 0 1 1.4-1.4l3.8 3.8v-2.5a1 1 0 1 1 2 0V20a.5.5 0 0 1-.5.5Z" fill="currentColor"/>',
+  "kucult":
+    '<path d="M9.4 4a1 1 0 0 1 2 0v5.4a.5.5 0 0 1-.5.5H5.5a1 1 0 1 1 0-2H8L4.2 4.1a1 1 0 0 1 1.4-1.4l3.8 3.8V4Z" fill="currentColor"/>' +
+    '<path d="M14.6 20a1 1 0 0 1-2 0v-5.4a.5.5 0 0 1 .5-.5h5.4a1 1 0 1 1 0 2H16l3.8 3.8a1 1 0 0 1-1.4 1.4l-3.8-3.8V20Z" fill="currentColor"/>',
   "kanal-metin":
     '<path d="M9.6 3.4a1 1 0 0 1 .8 1.16L9.9 8h4l.6-3.44a1 1 0 1 1 1.97.35L15.93 8H19a1 1 0 1 1 0 2h-3.42l-.7 4H18a1 1 0 1 1 0 2h-3.47l-.6 3.44a1 1 0 1 1-1.97-.35L12.5 16h-4l-.6 3.44a1 1 0 1 1-1.97-.35L6.47 16H3.4a1 1 0 1 1 0-2h3.42l.7-4H5a1 1 0 1 1 0-2h3.47l.6-3.44a1 1 0 0 1 1.16-.81Zm-.75 6.6-.7 4h4l.7-4h-4Z" fill="currentColor"/>',
   "kanal-ses":

@@ -1,7 +1,5 @@
-export const SCREEN_VOLUME_DEFAULT = 100;
-export const SCREEN_VOLUME_MAX = 200;
-
-const ANAHTAR = (userId: string) => `screenVolume:${userId}`;
+export const SES_VARSAYILAN = 100;
+export const SES_MAKS = 200;
 
 interface Zincir {
   source: MediaStreamAudioSourceNode;
@@ -11,19 +9,25 @@ interface Zincir {
 }
 
 /**
- * Uzak ekran seslerinin karistiricisi. Element `volume`'u KULLANILMAZ: 100
- * ustu yukseltme yalnizca GainNode ile yapilabilir (spec 8.1).
+ * Uzak seslerin karistiricisi. Element `volume`'u KULLANILMAZ: 100 ustu
+ * yukseltme yalnizca GainNode ile yapilabilir (spec 8.1).
  *
- * Seviye KISIYE OZELDIR: sunucuya yazilmaz, yayinciya bildirilmez, yalnizca
- * bu tarayicida saklanir.
+ * Ayni sinif iki yerde kullaniliyor: paylasilan ekranin sesi ve kisilerin
+ * mikrofonu. Ayiran tek sey `onek` -- seviyeler ayri anahtarlarda saklanir,
+ * yani birinin ekran sesini kismak mikrofonunu kismaz.
+ *
+ * Seviye KISIYE OZELDIR: sunucuya yazilmaz, karsi tarafa bildirilmez,
+ * yalnizca bu tarayicida saklanir.
  */
-export class ScreenAudioMixer {
+export class RemoteAudioMixer {
   private zincirler = new Map<string, Zincir>();
   private seviyeler = new Map<string, number>();
   private deafened = false;
 
   constructor(
     private ctx: AudioContext,
+    /** localStorage anahtar oneki: "screenVolume" | "micVolume". */
+    private onek: string,
     private storage: Storage = localStorage,
     /** Node testinde MediaStream yok; disaridan verilebilir. */
     private makeStream: (t: MediaStreamTrack) => MediaStream = (t) => new MediaStream([t]),
@@ -67,9 +71,9 @@ export class ScreenAudioMixer {
   volumeOf(userId: string): number {
     const bellekte = this.seviyeler.get(userId);
     if (bellekte !== undefined) return bellekte;
-    const ham = this.storage.getItem(ANAHTAR(userId));
+    const ham = this.storage.getItem(this.anahtar(userId));
     const sayi = ham === null ? NaN : Number(ham);
-    const seviye = Number.isFinite(sayi) ? this.kirp(sayi) : SCREEN_VOLUME_DEFAULT;
+    const seviye = Number.isFinite(sayi) ? this.kirp(sayi) : SES_VARSAYILAN;
     this.seviyeler.set(userId, seviye);
     return seviye;
   }
@@ -78,7 +82,7 @@ export class ScreenAudioMixer {
     const seviye = this.kirp(value);
     this.seviyeler.set(userId, seviye);
     try {
-      this.storage.setItem(ANAHTAR(userId), String(seviye));
+      this.storage.setItem(this.anahtar(userId), String(seviye));
     } catch {
       // Gizli sekmede localStorage yazmaya kapali olabilir; ses yine calisir.
     }
@@ -101,6 +105,32 @@ export class ScreenAudioMixer {
   }
 
   private kirp(v: number): number {
-    return Math.min(SCREEN_VOLUME_MAX, Math.max(0, Math.round(v)));
+    return Math.min(SES_MAKS, Math.max(0, Math.round(v)));
   }
+
+  private anahtar(userId: string): string {
+    return `${this.onek}:${userId}`;
+  }
+}
+
+/** Paylasilan ekranin sesi. */
+export function ekranMikseri(
+  ctx: AudioContext,
+  storage?: Storage,
+  makeStream?: (t: MediaStreamTrack) => MediaStream,
+): RemoteAudioMixer {
+  return new RemoteAudioMixer(ctx, "screenVolume", storage, makeStream);
+}
+
+/**
+ * Kisilerin mikrofonu. Uzak mikrofonlar bu miksere baglandiktan sonra ayrica
+ * bir <audio> elementinden CALINMAZ; iki yol birden acik kalirsa ses cift
+ * duyulur (RemoteAudio.svelte bu yuzden yalniz mikser yokken devreye girer).
+ */
+export function mikrofonMikseri(
+  ctx: AudioContext,
+  storage?: Storage,
+  makeStream?: (t: MediaStreamTrack) => MediaStream,
+): RemoteAudioMixer {
+  return new RemoteAudioMixer(ctx, "micVolume", storage, makeStream);
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { basHarf, sahneKareleri, type SahneGirdisi } from "./stage";
+import { basHarf, sahneDuzeni, sahneKareleri, type SahneGirdisi } from "./stage";
 import { bosTracks, type RemoteTracks } from "./voice.svelte";
 import type { VoiceMember } from "@shared/protocol";
 
@@ -231,5 +231,41 @@ describe("sahneKareleri gorunurluk bayraklari", () => {
       local: { cam: t, screenVideo: null },
     }));
     expect(k[0]).toMatchObject({ kendisi: true, track: t });
+  });
+});
+
+describe("sahneDuzeni", () => {
+  it("ekran yokken kisi kareleri galeride, serit bos", () => {
+    const d = sahneDuzeni(girdi());
+    expect(d.ekranlar).toHaveLength(0);
+    expect(d.kisiler.map((k) => k.userId)).toEqual(["ben", "o"]);
+  });
+
+  it("ekran varken ekranlar ve kisiler ayri listelerde", () => {
+    const d = sahneDuzeni(girdi({
+      members: [uye("ben"), uye("o", { screen: true })],
+      remote: new Map([["o", uzak({ screenVideo: track() })]]),
+    }));
+    expect(d.ekranlar.map((e) => e.userId)).toEqual(["o"]);
+    expect(d.kisiler.map((k) => k.userId)).toEqual(["ben", "o"]);
+  });
+
+  it("sahneKareleri duzenin duz hali: once ekranlar", () => {
+    const g = girdi({
+      members: [uye("ben"), uye("o", { screen: true, camera: true })],
+      remote: new Map([["o", uzak({ screenVideo: track(), cam: track() })]]),
+    });
+    const d = sahneDuzeni(g);
+    expect(sahneKareleri(g)).toEqual([...d.ekranlar, ...d.kisiler]);
+  });
+
+  it("video modunda videosuz kisiler seritten de dusurulur", () => {
+    const d = sahneDuzeni(girdi({
+      members: [uye("ben"), uye("o", { screen: true })],
+      remote: new Map([["o", uzak({ screenVideo: track() })]]),
+      mod: "video",
+    }));
+    expect(d.ekranlar).toHaveLength(1);
+    expect(d.kisiler).toHaveLength(0);
   });
 });

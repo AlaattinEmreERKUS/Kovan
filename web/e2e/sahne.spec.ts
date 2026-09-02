@@ -70,3 +70,47 @@ test("kendi karen aynali akar, karsi taraf duz gorur", async ({ browser }) => {
   await ctxA.close();
   await ctxB.close();
 });
+
+test("kisi sesi tek tek ayarlanir ve kalici olur", async ({ browser }) => {
+  const damga = Date.now();
+  await davetUret(`K3-${damga}`);
+  await davetUret(`K4-${damga}`);
+
+  const ctxA = await browser.newContext();
+  const ctxB = await browser.newContext();
+  const a = await ctxA.newPage();
+  const b = await ctxB.newPage();
+
+  // B ONCE kayit olur: sunucu yeni uyeyi bagli istemcilere yaymadigi icin
+  // A once baglanirsa B'nin adi A'da "…" kalir (ad ancak yenilemede gelir).
+  await kayitOl(b, `K4-${damga}`, `Kisilan${damga}`);
+  await kayitOl(a, `K3-${damga}`, `Kisan${damga}`);
+
+  await a.getByLabel("Ses kanalına katıl").click();
+  await b.getByLabel("Ses kanalına katıl").click();
+  await baglandi(a);
+
+  // Kendi karende ses ayari YOK: kendi sesin zaten calinmiyor.
+  const bAd = `Kisilan${damga}`;
+  await expect(a.getByLabel(`${bAd} mikrofon seviyesi`)).toHaveCount(1);
+  await expect(a.getByLabel(`Kisan${damga} mikrofon seviyesi`)).toHaveCount(0);
+
+  const kaydirici = a.getByLabel(`${bAd} mikrofon seviyesi`);
+  await kaydirici.fill("40");
+
+  // Seviye GainNode'a gider (element volume'u degil: 100 ustu ancak boyle).
+  const bId = await b.evaluate(() =>
+    (window as unknown as { __kovan: { oturum: { o: { selfId: string } } } }).__kovan.oturum.o.selfId);
+  expect(await a.evaluate((id) => (window as unknown as {
+    __kovan: { oturum: { micMixer: { volumeOf(u: string): number } } };
+  }).__kovan.oturum.micMixer.volumeOf(id), bId)).toBe(40);
+
+  // Yenilemeden sonra da ayni seviye.
+  await a.reload();
+  await expect(a.locator("article").first()).toBeVisible({ timeout: 10_000 });
+  await a.getByLabel("Ses kanalına katıl").click();
+  await expect(a.getByLabel(`${bAd} mikrofon seviyesi`)).toHaveValue("40");
+
+  await ctxA.close();
+  await ctxB.close();
+});

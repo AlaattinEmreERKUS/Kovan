@@ -1,16 +1,17 @@
 <script lang="ts">
   import { store } from "$lib/store.svelte";
   import { voice } from "$lib/voice.svelte";
-  import { sahneKareleri } from "$lib/stage";
+  import { sahneDuzeni } from "$lib/stage";
   import { gorunumOku, gorunumYaz, type GorunumModu } from "$lib/gorunum";
-  import type { ScreenAudioMixer } from "$lib/rtc/gain";
+  import type { RemoteAudioMixer } from "$lib/rtc/gain";
   import StageTile from "./StageTile.svelte";
   import VideoTile from "./VideoTile.svelte";
   import VoiceControls from "./VoiceControls.svelte";
 
-  let { selfId, mixer, onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen, onLeave }: {
+  let { selfId, mixer, micMixer, onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen, onLeave }: {
     selfId: string;
-    mixer: ScreenAudioMixer | null;
+    mixer: RemoteAudioMixer | null;
+    micMixer: RemoteAudioMixer | null;
     onToggleMute: () => void;
     onToggleDeafen: () => void;
     onToggleCamera: () => void;
@@ -19,6 +20,12 @@
   } = $props();
 
   let mod = $state<GorunumModu>(gorunumOku());
+  /**
+   * Buyutulmus ekranin anahtari. TARAYICI ICI buyutme: Fullscreen API
+   * kullanilmiyor, sahne uygulamanin ustune yayiliyor. Kontrol cubugu ve
+   * Esc her zaman erisilebilir kaliyor.
+   */
+  let buyutulen = $state<string | null>(null);
 
   function gorunumDegistir() {
     mod = mod === "herkes" ? "video" : "herkes";
@@ -27,7 +34,7 @@
 
   const adlar = $derived(new Map(store.members.map((m) => [m.id, m.displayName])));
 
-  const kareler = $derived(sahneKareleri({
+  const duzen = $derived(sahneDuzeni({
     members: voice.members,
     remote: voice.remote,
     local: voice.local,
@@ -39,31 +46,58 @@
     selfDeafened: voice.deafened,
     mod,
   }));
+
+  // Paylasim biterse buyutme durumu asili kalmamali.
+  const buyukKare = $derived(duzen.ekranlar.find((e) => e.anahtar === buyutulen) ?? null);
+  $effect(() => {
+    if (buyutulen !== null && buyukKare === null) buyutulen = null;
+  });
+
+  const gosterilenEkranlar = $derived(buyukKare ? [buyukKare] : duzen.ekranlar);
+  /** Ekran paylasiliyorsa kisiler serite iner; yoksa ana alanda galeri olur. */
+  const seritte = $derived(duzen.ekranlar.length > 0);
+
+  function tusla(e: KeyboardEvent) {
+    if (e.key === "Escape" && buyutulen !== null) buyutulen = null;
+  }
 </script>
 
-<section class="sahne">
-  <div class="alan">
-    {#if kareler.length === 0}
+<svelte:window onkeydown={tusla} />
+
+<section class="sahne" data-buyuk={buyukKare !== null}>
+  <div class="alan" data-alan="ana" class:galeri={!seritte}>
+    {#if duzen.ekranlar.length === 0 && duzen.kisiler.length === 0}
       <!-- Bos siyah alan bozukluk gibi okunur; sebebini yaz. -->
       <p class="bos">Kimsenin kamerası açık değil.</p>
+    {:else if seritte}
+      <div class="ekranlar" class:tek={gosterilenEkranlar.length === 1}>
+        {#each gosterilenEkranlar as e (e.anahtar)}
+          <VideoTile
+            track={e.track}
+            label={e.kendisi ? `${e.ad} — ekranın` : `${e.ad} — ekran`}
+            userId={e.userId}
+            mixer={e.kendisi ? null : mixer}
+            buyuk={buyutulen === e.anahtar}
+            onBuyut={() => (buyutulen = buyutulen === e.anahtar ? null : e.anahtar)}
+          />
+        {/each}
+      </div>
     {:else}
       <div class="izgara">
-        {#each kareler as k (k.anahtar)}
-          {#if k.tur === "ekran"}
-            <VideoTile
-              track={k.track}
-              label={k.kendisi ? `${k.ad} — ekranın` : `${k.ad} — ekran`}
-              kind="screen"
-              userId={k.userId}
-              mixer={k.kendisi ? null : mixer}
-            />
-          {:else}
-            <StageTile kare={k} />
-          {/if}
+        {#each duzen.kisiler as k (k.anahtar)}
+          <StageTile kare={k} {micMixer} />
         {/each}
       </div>
     {/if}
   </div>
+
+  {#if seritte && duzen.kisiler.length > 0 && buyukKare === null}
+    <div class="serit" data-alan="serit">
+      {#each duzen.kisiler as k (k.anahtar)}
+        <div class="seritKare"><StageTile kare={k} {micMixer} /></div>
+      {/each}
+    </div>
+  {/if}
 
   <VoiceControls
     {mod}
@@ -78,14 +112,53 @@
 
 <style>
   .sahne { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-  .alan { flex: 1; overflow-y: auto; padding: 14px 16px; }
+  /*
+    Tarayici ici tam ekran: sahne uygulamanin ustune yayilir, isletim
+    sisteminin tam ekrani DEGIL (Napol boyle istedi). Kontrol cubugu
+    goruntunun altinda kalmaya devam eder.
+  */
+  .sahne[data-buyuk="true"] {
+    position: fixed; inset: 0; z-index: 60;
+    background: var(--zemin-0);
+  }
+
+  .alan {
+    flex: 1; min-height: 0; display: flex; flex-direction: column;
+    padding: 14px 16px;
+  }
+  .alan.galeri { overflow-y: auto; }
+
+  /* Ekranlar ana alanin TAMAMINI kaplar: yukseklik alandan gelir. */
+  .ekranlar {
+    flex: 1; min-height: 0;
+    display: grid; gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    align-items: stretch;
+  }
+  .ekranlar.tek { grid-template-columns: 1fr; }
+
+  /*
+    Galeri: kareler sabit oranli, satirlar YUKARIDAN baslar. align-content
+    olmadan satirlar esit boluniyor ve kareler arasinda gereksiz bosluk
+    aciliyordu.
+  */
   .izgara {
     display: grid; gap: 10px;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     align-content: start;
   }
+
+  /* Serit: sabit yukseklikte, tasarsa yatay kayan kisi kareleri. */
+  .serit {
+    display: flex; gap: 8px;
+    padding: 0 16px 10px;
+    overflow-x: auto; overflow-y: hidden;
+    scrollbar-width: thin;
+  }
+  .seritKare { flex: 0 0 auto; width: 168px; }
+
   .bos {
-    height: 100%; display: grid; place-items: center;
+    flex: 1; display: grid; place-items: center;
     margin: 0; color: var(--metin-3); font-size: 13px;
   }
 </style>

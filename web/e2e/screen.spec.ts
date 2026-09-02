@@ -64,11 +64,15 @@ test("ekran paylasimi izleyiciye ayri yuvalardan ulasir", async ({ browser }) =>
 
   // Izleyicide kare ve rozet.
   await expect(b.getByLabel("ekran paylaşıyor")).toBeVisible({ timeout: 15_000 });
-  await expect(b.locator("figure.ekran video")).toBeVisible({ timeout: 15_000 });
+  await expect(b.locator('[data-kare="ekran"] video')).toBeVisible({ timeout: 15_000 });
 
-  // Ekran karesi izgaranin BASINDA: dikkatin merkezi paylasilan ekrandir.
-  await expect(b.locator('[data-kare]').first()).toHaveAttribute("data-kare", "ekran");
-  await expect(a.locator('[data-kare]').first()).toHaveAttribute("data-kare", "ekran");
+  // Ekran ANA ALANDA, kisi kareleri altta seritte: dikkatin merkezi
+  // paylasilan ekrandir, kameralar kucuk kalir (Discord duzeni).
+  for (const s of [a, b]) {
+    await expect(s.locator('[data-alan="ana"] [data-kare="ekran"]')).toHaveCount(1);
+    await expect(s.locator('[data-alan="ana"] [data-kare="kisi"]')).toHaveCount(0);
+    await expect(s.locator('[data-alan="serit"] [data-kare="kisi"]')).toHaveCount(2);
+  }
 
   // Paylasan taraf kendi ekranini da gorur (sonsuz ayna bilerek serbest),
   // ama kendi ekran sesini kisacak kaydirici cizilmez.
@@ -155,6 +159,57 @@ test("paylasim bitince ekran karesi kalkar, kisi kareleri kalir", async ({ brows
   // Serit sahnedeyken de gorunur; durdurma dugmesi oradan calisir.
   await a.getByRole("status").getByRole("button", { name: "Durdur", exact: true }).click();
 
+  await expect(b.locator('[data-kare="ekran"]')).toHaveCount(0, { timeout: 15_000 });
+  await expect(b.locator('[data-kare="kisi"]')).toHaveCount(2);
+
+  await ctxA.close();
+  await ctxB.close();
+});
+
+test("ekran buyutulup kucultulur, Esc de kapatir", async ({ browser }) => {
+  const damga = Date.now();
+  await davetUret(`S5-${damga}`);
+  await davetUret(`S6-${damga}`);
+
+  const ctxA = await browser.newContext();
+  const ctxB = await browser.newContext();
+  await ctxA.addInitScript(SAHTE_EKRAN);
+  const a = await ctxA.newPage();
+  const b = await ctxB.newPage();
+
+  await kayitOl(a, `S5-${damga}`, `Buyuten${damga}`);
+  await kayitOl(b, `S6-${damga}`, `Goren${damga}`);
+
+  await a.getByLabel("Ses kanalına katıl").click();
+  await b.getByLabel("Ses kanalına katıl").click();
+  await expect(a.getByText("2/4")).toBeVisible();
+
+  await a.getByLabel("Ekran paylaş").click();
+  await expect(b.locator('[data-kare="ekran"]')).toHaveCount(1, { timeout: 15_000 });
+  await expect(b.locator('[data-alan="serit"] [data-kare="kisi"]')).toHaveCount(2);
+
+  // Buyutme IZLEYICININ kendi karari: paylasan tarafi etkilemez.
+  await b.getByLabel("Ekranı büyüt").click();
+  await expect(b.locator('[data-kare="ekran"][data-buyuk="true"]')).toHaveCount(1);
+  // Buyukken serit kalkar, kontrol cubugu durur.
+  await expect(b.locator('[data-alan="serit"]')).toHaveCount(0);
+  await expect(b.getByLabel("Odadan ayrıl")).toBeVisible();
+  await expect(a.locator('[data-kare="ekran"][data-buyuk="true"]')).toHaveCount(0);
+
+  // Dugmeyle kucult.
+  await b.getByLabel("Ekranı küçült").click();
+  await expect(b.locator('[data-kare="ekran"][data-buyuk="true"]')).toHaveCount(0);
+  await expect(b.locator('[data-alan="serit"] [data-kare="kisi"]')).toHaveCount(2);
+
+  // Esc de kucultur.
+  await b.getByLabel("Ekranı büyüt").click();
+  await expect(b.locator('[data-kare="ekran"][data-buyuk="true"]')).toHaveCount(1);
+  await b.keyboard.press("Escape");
+  await expect(b.locator('[data-kare="ekran"][data-buyuk="true"]')).toHaveCount(0);
+
+  // Paylasim biterse buyutme asili kalmaz.
+  await b.getByLabel("Ekranı büyüt").click();
+  await a.getByRole("status").getByRole("button", { name: "Durdur", exact: true }).click();
   await expect(b.locator('[data-kare="ekran"]')).toHaveCount(0, { timeout: 15_000 });
   await expect(b.locator('[data-kare="kisi"]')).toHaveCount(2);
 

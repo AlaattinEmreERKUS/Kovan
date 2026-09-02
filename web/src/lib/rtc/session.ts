@@ -5,7 +5,7 @@ import { LocalMedia } from "./media";
 import { Mesh } from "./mesh";
 import { Peer, type SignalPayload, type TrackSlot } from "./peer";
 import { SpeakingDetector } from "./speaking";
-import { ScreenAudioMixer } from "./gain";
+import { ekranMikseri, mikrofonMikseri, type RemoteAudioMixer } from "./gain";
 
 export interface SessionOptions {
   conn: Connection;
@@ -33,7 +33,9 @@ export class VoiceSession {
   private audioCtx: AudioContext | null = null;
   private speaking: SpeakingDetector | null = null;
   /** Arayuz kaydiriciyi buradan okur; kisiye ozel, sunucuya gitmez. */
-  mixer: ScreenAudioMixer | null = null;
+  mixer: RemoteAudioMixer | null = null;
+  /** Kisi bazli mikrofon seviyesi; RemoteAudio yalnizca bu yokken calar. */
+  micMixer: RemoteAudioMixer | null = null;
 
   constructor(private o: SessionOptions) {
     this.media = o.media ?? new LocalMedia();
@@ -69,8 +71,10 @@ export class VoiceSession {
         },
       });
       if (this.media.mic) this.speaking.watch(this.o.selfId, this.media.mic);
-      this.mixer = new ScreenAudioMixer(this.audioCtx);
+      this.mixer = ekranMikseri(this.audioCtx);
       this.mixer.setDeafened(voice.deafened);
+      this.micMixer = mikrofonMikseri(this.audioCtx);
+      this.micMixer.setDeafened(voice.deafened);
     }
 
     this.mesh = new Mesh({
@@ -81,6 +85,7 @@ export class VoiceSession {
         voice.speaking.delete(userId);
         this.speaking?.unwatch(userId);
         this.mixer?.detach(userId);
+        this.micMixer?.detach(userId);
         voice.connection.delete(userId);
       },
     });
@@ -102,6 +107,8 @@ export class VoiceSession {
     this.speaking = null;
     this.mixer?.close();
     this.mixer = null;
+    this.micMixer?.close();
+    this.micMixer = null;
     void this.audioCtx?.close();
     this.audioCtx = null;
     this.media.stopAll();
@@ -133,6 +140,7 @@ export class VoiceSession {
       this.media.setMuted(true);
     }
     this.mixer?.setDeafened(deafened);
+    this.micMixer?.setDeafened(deafened);
     this.publish();
   }
 
@@ -254,12 +262,16 @@ export class VoiceSession {
     // eden bilgi sunucudan gelen VoiceMember.camera / .screen bayraklaridir.
     // Gorunurluk karari bu yuzden stage.ts'te o bayraklardan veriliyor.
     yaz(track);
-    if (slot === "mic") this.speaking?.watch(userId, track);
+    if (slot === "mic") {
+      this.speaking?.watch(userId, track);
+      this.micMixer?.attach(userId, track);
+    }
     if (slot === "screenAudio") this.mixer?.attach(userId, track);
 
     track.addEventListener("ended", () => {
       yaz(null);
       if (slot === "screenAudio") this.mixer?.detach(userId);
+      if (slot === "mic") this.micMixer?.detach(userId);
     });
   }
 

@@ -118,6 +118,7 @@
       <VoiceStage
         selfId={store.me.id}
         mixer={oturum?.mixer ?? null}
+        micMixer={oturum?.micMixer ?? null}
         onToggleMute={() => oturum?.setMuted(!voice.muted)}
         onToggleDeafen={() => oturum?.setDeafened(!voice.deafened)}
         onToggleCamera={() => void oturum?.setCamera(!voice.camera)}
@@ -130,7 +131,7 @@
     {/if}
   </main>
   <MemberList />
-  <RemoteAudio />
+  <RemoteAudio micMixer={oturum?.micMixer ?? null} />
 </div>
 
 <style>

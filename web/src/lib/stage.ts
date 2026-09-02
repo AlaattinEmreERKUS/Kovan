@@ -87,7 +87,18 @@ function uzakVideo(
   return g.remote.get(m.userId)?.[yuva] ?? null;
 }
 
-export function sahneKareleri(g: SahneGirdisi): Kare[] {
+/**
+ * Sahnenin iki bolgesi. Ekran paylasiliyorsa ekranlar ana alani kaplar ve
+ * kisi kareleri altta serite iner (Discord duzeni); ekran yoksa kisiler ana
+ * alanda galeri olur. Ayrim burada yapilir, bilesende degil: hangi karenin
+ * nerede cizilecegi DOM'suz test edilebilir bir karar.
+ */
+export interface SahneDuzeni {
+  ekranlar: EkranKare[];
+  kisiler: KisiKare[];
+}
+
+export function sahneDuzeni(g: SahneGirdisi): SahneDuzeni {
   const sirali = siralaKendisiOnce(g.members, g.selfId);
   const adOf = (userId: string) => g.adlar.get(userId) ?? AD_YOK;
 
@@ -130,5 +141,11 @@ export function sahneKareleri(g: SahneGirdisi): Kare[] {
     });
   }
 
+  return { ekranlar, kisiler };
+}
+
+/** Duz liste; sira her zaman once ekranlar. */
+export function sahneKareleri(g: SahneGirdisi): Kare[] {
+  const { ekranlar, kisiler } = sahneDuzeni(g);
   return [...ekranlar, ...kisiler];
 }
