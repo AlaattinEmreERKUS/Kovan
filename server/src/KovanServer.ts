@@ -6,7 +6,7 @@ import {
   MAX_CONTENT, MAX_EMOJI, insertMessage, messageExists, messagesAfter,
   reactionsFor, recentMessages, toggleReaction,
 } from "./messages";
-import { VOICE_CAP, voiceFull, voiceMembers } from "./voice";
+import { VOICE_CAP, sanitizeVoiceFlags, voiceFull, voiceMembers } from "./voice";
 import type { ClientEvent, ServerEvent, User } from "@shared/protocol";
 
 interface UserRow extends Record<string, SqlStorageValue> {
@@ -165,6 +165,21 @@ export class KovanServer implements DurableObject {
         return this.handleVoiceJoin(ws, state);
       case "voice.leave":
         return this.handleVoiceLeave(ws, state);
+      case "voice.state": {
+        if (!state.inVoice) {
+          return this.fail(ws, "seste_degil", "Önce ses kanalına katılın.");
+        }
+        // Bes bayragin hepsi boolean degilse paket topluca reddedilir. Ham
+        // deger attachment a yazilirsa hibernation sonrasi bozuk state geri
+        // yuklenir ve yayin JSON u sessizce bozulur.
+        const flags = sanitizeVoiceFlags(event);
+        if (!flags) {
+          return this.fail(ws, "gecersiz_durum", "Ses durumu geçersiz.");
+        }
+        writeState(ws, flags);
+        this.broadcastVoice();
+        return;
+      }
       case "sync": {
         // Sayi olmayan / ondalikli / negatif deger bastan senkron sayilir.
         // Ham deger SQL'e verilirse SQLite tur onceligi yuzunden sessizce

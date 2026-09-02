@@ -69,3 +69,55 @@ describe("ses kanali uyeligi", () => {
     expect((await bekle(wsE, "error")).code).toBe("ses_dolu");
   });
 });
+
+describe("voice.state", () => {
+  beforeEach(() => reset());
+
+  const tam = { muted: true, deafened: false, camera: false, screen: false, screenAudio: false };
+
+  it("bayraklari herkese yayar", async () => {
+    const wsA = await baglan(await kayit("A1", "napol"));
+    const helloA = await bekle(wsA, "hello");
+    wsA.send(JSON.stringify({ t: "voice.join" }));
+    await bekle(wsA, "voice.members");
+
+    wsA.send(JSON.stringify({ t: "voice.state", ...tam }));
+    const uyeler = (await bekle(wsA, "voice.members")).members;
+    expect(uyeler.find((m) => m.userId === helloA.me.id)!.muted).toBe(true);
+  });
+
+  it("ekran ve sistem sesi bayraklari birlikte tasinir", async () => {
+    const wsA = await baglan(await kayit("A1", "napol"));
+    await bekle(wsA, "hello");
+    wsA.send(JSON.stringify({ t: "voice.join" }));
+    await bekle(wsA, "voice.members");
+
+    wsA.send(JSON.stringify({
+      t: "voice.state", muted: false, deafened: false,
+      camera: true, screen: true, screenAudio: true,
+    }));
+    expect((await bekle(wsA, "voice.members")).members[0])
+      .toMatchObject({ camera: true, screen: true, screenAudio: true });
+  });
+
+  it("seste degilken reddedilir", async () => {
+    const wsA = await baglan(await kayit("A1", "napol"));
+    await bekle(wsA, "hello");
+    wsA.send(JSON.stringify({ t: "voice.state", ...tam }));
+    expect((await bekle(wsA, "error")).code).toBe("seste_degil");
+  });
+
+  it("boolean olmayan bayrak socketi oldurmez, hata dondurur", async () => {
+    const wsA = await baglan(await kayit("A1", "napol"));
+    await bekle(wsA, "hello");
+    wsA.send(JSON.stringify({ t: "voice.join" }));
+    await bekle(wsA, "voice.members");
+
+    wsA.send(JSON.stringify({ t: "voice.state", ...tam, muted: "evet" }));
+    expect((await bekle(wsA, "error")).code).toBe("gecersiz_durum");
+
+    // Socket hala yasiyor: sonraki gecerli paket calisir.
+    wsA.send(JSON.stringify({ t: "voice.state", ...tam }));
+    expect((await bekle(wsA, "voice.members")).members[0].muted).toBe(true);
+  });
+});
