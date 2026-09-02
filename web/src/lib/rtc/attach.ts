@@ -28,6 +28,25 @@ export function attachStream(node: HTMLMediaElement, track: MediaStreamTrack) {
 function bagla(node: HTMLMediaElement, track: MediaStreamTrack): void {
   const mevcut = node.srcObject as MediaStream | null;
   const izler = typeof mevcut?.getTracks === "function" ? mevcut.getTracks() : null;
-  if (izler && izler.length === 1 && izler[0] === track) return;
-  node.srcObject = new MediaStream([track]);
+  const ayni = izler !== null && izler.length === 1 && izler[0] === track;
+  if (!ayni) node.srcObject = new MediaStream([track]);
+  oynat(node);
+}
+
+/**
+ * `autoplay` ozniteligi TEK BASINA yetmez. Elemanin "can autoplay" bayragi
+ * bir kez tuketildikten sonra srcObject'e yazmak oynatmayi baslatmaz; video
+ * hazir veriyle (readyState 4, dogru videoWidth) ama `paused: true` olarak
+ * durur ve siyah cizer. Canlida gorulen tam olarak buydu: kamera da ekran da
+ * DOM'daydi, track'ler canliydi, tek fark `paused` idi.
+ *
+ * Bu yuzden baglama sonrasi oynatma ACIKCA istenir. Ayni track ile gelen
+ * update'te srcObject'e dokunulmaz -- titreme oradan geliyordu -- ama
+ * duraklamis video yine de kurtarilir.
+ */
+function oynat(node: HTMLMediaElement): void {
+  if (!node.paused) return;
+  // Reddedilebilir (otomatik oynatma engeli, eleman DOM'dan koptu). Ariza
+  // degil: sessizce birak, bir sonraki update yeniden dener.
+  node.play().catch(() => {});
 }
