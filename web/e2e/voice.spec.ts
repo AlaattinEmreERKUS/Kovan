@@ -96,9 +96,79 @@ test("iki kullanici ses kanalinda gercekten baglanir ve ses akar", async ({ brow
   await expect(b.getByLabel("mikrofonu kapalı")).toBeVisible();
 
   // Ayrilinca listeden duser.
-  await a.getByLabel("Ses kanalından ayrıl").click();
+  await a.getByLabel("Odadan ayrıl").click();
   await expect(b.getByText("1/4")).toBeVisible();
 
   await ctxA.close();
   await ctxB.close();
+});
+
+test("sahne mesaj alaninin yerini alir, metin sekmesi sesten atmaz", async ({ browser }) => {
+  const damga = Date.now();
+  await davetUret(`S1-${damga}`);
+
+  const ctx = await browser.newContext();
+  const a = await ctx.newPage();
+  await kayitOl(a, `S1-${damga}`, `Sekme${damga}`);
+
+  // Baslangic: metin sekmesi. Mesaj listesi gorunur, sahne yok.
+  await expect(a.getByRole("log")).toBeVisible();
+  await expect(a.locator('[data-kare="kisi"]')).toHaveCount(0);
+
+  await a.getByLabel("Ses kanalına katıl").click();
+
+  // Sahne acildi: mesaj listesi gitti, kendi karen geldi.
+  await expect(a.locator('[data-kare="kisi"][data-kendisi="true"]')).toBeVisible();
+  await expect(a.getByRole("log")).toHaveCount(0);
+  await expect(a.getByLabel("Odadan ayrıl")).toBeVisible();
+
+  // Metin sekmesine don: mesajlar geri geldi, ses DEVAM ediyor.
+  await a.getByLabel("Metin kanalı: genel").click();
+  await expect(a.getByRole("log")).toBeVisible();
+  await expect(a.locator('[data-kare="kisi"]')).toHaveCount(0);
+
+  // Sol alt panel gorunur ve mikrofon oradan kapanabilir.
+  await expect(a.getByLabel("Ses sahnesine dön").first()).toBeVisible();
+  await a.getByLabel("Mikrofonu kapat").click();
+  await expect(a.getByLabel("Mikrofonu aç")).toBeVisible();
+
+  // Panelden sahneye don.
+  await a.getByLabel("Ses sahnesine dön").first().click();
+  await expect(a.locator('[data-kare="kisi"][data-kendisi="true"]')).toBeVisible();
+
+  // Cubuktaki ayril kanaldan cikarir ve metin sekmesine dondurur.
+  await a.getByLabel("Odadan ayrıl").click();
+  await expect(a.getByRole("log")).toBeVisible();
+  await expect(a.locator('[data-kare="kisi"]')).toHaveCount(0);
+  await expect(a.getByLabel("Ses kanalına katıl")).toBeVisible();
+
+  await ctx.close();
+});
+
+test("gorunum modu videosuz kareleri gizler ve secim kalici olur", async ({ browser }) => {
+  const damga = Date.now();
+  await davetUret(`S2-${damga}`);
+
+  const ctx = await browser.newContext();
+  const a = await ctx.newPage();
+  await kayitOl(a, `S2-${damga}`, `Gorunum${damga}`);
+
+  await a.getByLabel("Ses kanalına katıl").click();
+  await expect(a.locator('[data-kare="kisi"]')).toHaveCount(1);
+
+  // Kamera kapali: "yalniz video" modunda hicbir kare kalmaz.
+  await a.getByLabel("Yalnız video açık olanları göster").click();
+  await expect(a.locator('[data-kare="kisi"]')).toHaveCount(0);
+  await expect(a.getByText("Kimsenin kamerası açık değil")).toBeVisible();
+
+  // Secim localStorage'a yazildi: sayfa yenilenince korunur.
+  await a.reload();
+  await a.getByLabel("Ses kanalına katıl").click();
+  await expect(a.getByText("Kimsenin kamerası açık değil")).toBeVisible();
+
+  // Geri al.
+  await a.getByLabel("Herkesi göster").click();
+  await expect(a.locator('[data-kare="kisi"]')).toHaveCount(1);
+
+  await ctx.close();
 });
