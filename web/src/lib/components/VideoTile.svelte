@@ -1,6 +1,7 @@
 <script lang="ts">
   import { attachStream } from "$lib/rtc/attach";
   import { SCREEN_VOLUME_DEFAULT, SCREEN_VOLUME_MAX, type ScreenAudioMixer } from "$lib/rtc/gain";
+  import Icon from "./Icon.svelte";
 
   let { track, label, kind, userId, mixer }: {
     track: MediaStreamTrack;
@@ -22,12 +23,12 @@
   }
 </script>
 
-<figure class:ekran={kind === "screen"} data-user={userId}>
+<figure class:ekran={kind === "screen"} data-kare="ekran" data-user={userId}>
   <!-- svelte-ignore a11y_media_has_caption -->
   <video use:attachStream={track} autoplay playsinline muted></video>
-  {#if kind === "screen"}
+  {#if kind === "screen" && mixer}
     <div class="ses">
-      <span aria-hidden="true">🔊</span>
+      <Icon ad="hoparlor" boyut={13} />
       <input
         type="range" min="0" max={SCREEN_VOLUME_MAX} step="5"
         value={seviye}
