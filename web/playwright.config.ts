@@ -3,7 +3,7 @@ import { defineConfig } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e",
   // Canli duman testi ayri config ile kosulur (playwright.prod.config.ts).
-  testIgnore: /prod-smoke\.spec\.ts/,
+  testIgnore: /prod-(smoke|voice-smoke)\.spec\.ts/,
   timeout: 30_000,
   // Tek DO, TEK ses kanali var. Paralel kosan iki test ayni kanala girip
   // birbirinin uye sayacini bozuyor ("2/4" beklerken 3/4 goruyor).
