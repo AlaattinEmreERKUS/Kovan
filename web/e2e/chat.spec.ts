@@ -39,3 +39,30 @@ test("iki kullanici gercek zamanli mesajlasir ve tepki verir", async ({ browser 
   await ctxA.close();
   await ctxB.close();
 });
+
+test("bagliyken kayit olan uyenin adi hemen gorunur", async ({ browser }) => {
+  const damga = Date.now();
+  await davetUret(`E3-${damga}`);
+  await davetUret(`E4-${damga}`);
+
+  const ctxA = await browser.newContext();
+  const ctxB = await browser.newContext();
+  const a = await ctxA.newPage();
+  const b = await ctxB.newPage();
+
+  // A ONCE baglanir: B kayit oldugunda A'nin uye listesi onu tanimiyor.
+  // member.new olmadan A'da adi "…" kalirdi (yalnizca yenileyince duzelirdi).
+  await kayitOl(a, `E3-${damga}`, `Once${damga}`);
+  await kayitOl(b, `E4-${damga}`, `Sonra${damga}`);
+
+  await expect(a.getByRole("complementary").getByText(`Sonra${damga}`)).toBeVisible();
+
+  // Ses karesinde de gercek ad yazar.
+  await a.getByLabel("Ses kanalına katıl").click();
+  await b.getByLabel("Ses kanalına katıl").click();
+  await expect(a.locator('[data-kare="kisi"]')).toHaveCount(2);
+  await expect(a.getByLabel(`Sonra${damga} mikrofon seviyesi`)).toHaveCount(1);
+
+  await ctxA.close();
+  await ctxB.close();
+});

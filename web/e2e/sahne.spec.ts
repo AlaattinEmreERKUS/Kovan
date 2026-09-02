@@ -81,10 +81,8 @@ test("kisi sesi tek tek ayarlanir ve kalici olur", async ({ browser }) => {
   const a = await ctxA.newPage();
   const b = await ctxB.newPage();
 
-  // B ONCE kayit olur: sunucu yeni uyeyi bagli istemcilere yaymadigi icin
-  // A once baglanirsa B'nin adi A'da "…" kalir (ad ancak yenilemede gelir).
-  await kayitOl(b, `K4-${damga}`, `Kisilan${damga}`);
   await kayitOl(a, `K3-${damga}`, `Kisan${damga}`);
+  await kayitOl(b, `K4-${damga}`, `Kisilan${damga}`);
 
   await a.getByLabel("Ses kanalına katıl").click();
   await b.getByLabel("Ses kanalına katıl").click();

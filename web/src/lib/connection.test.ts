@@ -113,6 +113,46 @@ describe("Connection", () => {
     c.close();
   });
 
+  it("member.new bilinmeyen uyeyi listeye ekler", () => {
+    const c = new Connection("wss://x/ws", "tok");
+    const ws = SahteSoket.sonuncu;
+    ws.onopen!();
+    ws.onmessage!({ data: JSON.stringify({
+      t: "member.new", user: { id: "u9", username: "denis", displayName: "Denis" },
+    }) });
+    expect(store.members).toEqual([{ id: "u9", username: "denis", displayName: "Denis" }]);
+    c.close();
+  });
+
+  it("member.new ayni kisiyi iki kez eklemez, gunceller", () => {
+    const c = new Connection("wss://x/ws", "tok");
+    const ws = SahteSoket.sonuncu;
+    ws.onopen!();
+    const olay = (displayName: string) => JSON.stringify({
+      t: "member.new", user: { id: "u9", username: "denis", displayName },
+    });
+    ws.onmessage!({ data: olay("Denis") });
+    ws.onmessage!({ data: olay("Denis 2") });
+    expect(store.members).toHaveLength(1);
+    expect(store.members[0].displayName).toBe("Denis 2");
+    c.close();
+  });
+
+  it("member.gone uyeyi listeden ve online kumesinden dusurur", () => {
+    const c = new Connection("wss://x/ws", "tok");
+    const ws = SahteSoket.sonuncu;
+    ws.onopen!();
+    store.members = [
+      { id: "u1", username: "napol", displayName: "Napol" },
+      { id: "u9", username: "cop", displayName: "Cop" },
+    ];
+    store.online.add("u9");
+    ws.onmessage!({ data: JSON.stringify({ t: "member.gone", userIds: ["u9"] }) });
+    expect(store.members.map((m) => m.id)).toEqual(["u1"]);
+    expect(store.online.has("u9")).toBe(false);
+    c.close();
+  });
+
   it("close sonrasi yeniden baglanmaz", () => {
     const c = new Connection("wss://x/ws", "tok");
     const ilk = SahteSoket.sonuncu;

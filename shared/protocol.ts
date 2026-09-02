@@ -43,6 +43,10 @@ export type ServerEvent =
   | { t: "msg.new"; message: Message; localId?: string }
   | { t: "reaction.update"; messageId: number; emoji: string; userIds: string[] }
   | { t: "presence.update"; userId: string; online: boolean }
+  /** Yeni bir uye tanindi. Baglantida DIGERLERINE yayilir; istemci upsert eder. */
+  | { t: "member.new"; user: User }
+  /** Yonetici bir veya daha fazla uyeyi sildi. */
+  | { t: "member.gone"; userIds: string[] }
   | { t: "typing"; userId: string }
   | { t: "sync.result"; messages: Message[] }
   | { t: "voice.members"; members: VoiceMember[] }

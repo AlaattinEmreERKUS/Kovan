@@ -8,6 +8,7 @@ import {
 } from "./messages";
 import { MAX_SIGNAL, VOICE_CAP, sanitizeVoiceFlags, voiceFull, voiceMembers } from "./voice";
 import { iceServers } from "./turn";
+import { kullaniciListesi, kullanicilariSil } from "./users";
 import type { ClientEvent, ServerEvent, User } from "@shared/protocol";
 
 interface UserRow extends Record<string, SqlStorageValue> {
@@ -38,11 +39,7 @@ export class KovanServer implements DurableObject {
     // Yonetici davet ucu. DO SQLite'a CLI'dan erisim yok; davet uretmenin
     // tek yolu bu. Anahtar sabit zamanda karsilastirilir.
     if (request.method === "POST" && url.pathname === "/api/admin/invite") {
-      const key = this.env.ADMIN_KEY;
-      const gelen = request.headers.get("x-admin") ?? "";
-      if (!key || !timingSafeEqual(gelen, key)) {
-        return new Response("forbidden", { status: 403 });
-      }
+      if (!this.yoneticiMi(request)) return new Response("forbidden", { status: 403 });
       const body = await KovanServer.readObject(request);
       const code = typeof body?.code === "string" ? body.code.trim() : "";
       if (!code || code.length > 64) {
@@ -50,6 +47,35 @@ export class KovanServer implements DurableObject {
       }
       this.sql.exec("INSERT OR IGNORE INTO invites (code) VALUES (?)", code);
       return Response.json({ ok: true });
+    }
+
+    // Kimin kayitli oldugunu silmeden once gormek icin. Uye listesi arayuzde
+    // de var ama silme kararini mesaj sayisiyla birlikte vermek gerekiyor.
+    if (request.method === "GET" && url.pathname === "/api/admin/users") {
+      if (!this.yoneticiMi(request)) return new Response("forbidden", { status: 403 });
+      return Response.json({ users: kullaniciListesi(this.sql) });
+    }
+
+    // GERI ALINAMAZ. Silinen kullanicinin mesajlari ve tepkileri de gider.
+    if (request.method === "POST" && url.pathname === "/api/admin/users/delete") {
+      if (!this.yoneticiMi(request)) return new Response("forbidden", { status: 403 });
+      const body = await KovanServer.readObject(request);
+      const gelen = body?.usernames;
+      if (!Array.isArray(gelen) || gelen.some((u) => typeof u !== "string")) {
+        return Response.json(
+          { code: "gecersiz_liste", message: "usernames bir metin dizisi olmali." },
+          { status: 400 });
+      }
+      const { ids } = kullanicilariSil(this.sql, gelen as string[]);
+      if (ids.length > 0) {
+        // Acik socket'i olan silinmis kullanici, kaydi gitmis olmasina ragmen
+        // konusmaya devam ederdi: once dusur, sonra digerlerine haber ver.
+        for (const ws of this.ctx.getWebSockets()) {
+          if (ids.includes(readState(ws).userId)) ws.close(4003, "hesap silindi");
+        }
+        broadcast(this.ctx, { t: "member.gone", userIds: ids });
+      }
+      return Response.json({ ok: true, silinen: ids.length });
     }
 
     // Yalnizca yerel gelistirmede: KOVAN_DEV bayragi wrangler dev --var ile
@@ -106,9 +132,19 @@ export class KovanServer implements DurableObject {
       voiceMembers: voiceMembers(this.allSocketStates()),
     } satisfies ServerEvent));
 
+    // Yeni uye DIGERLERINE tanitilir. Bu olmadan, sen bagliyken kayit olan
+    // birinin adi sende "…" kalir ve ancak sayfa yenilenince gelir.
+    broadcast(this.ctx, { t: "member.new", user }, server);
     broadcast(this.ctx, { t: "presence.update", userId: user.id, online: true }, server);
 
     return new Response(null, { status: 101, webSocket: client });
+  }
+
+  /** Sabit zamanli karsilastirma: anahtar tahmini zamanlamadan sizmasin. */
+  private yoneticiMi(request: Request): boolean {
+    const key = this.env.ADMIN_KEY;
+    const gelen = request.headers.get("x-admin") ?? "";
+    return Boolean(key) && timingSafeEqual(gelen, key!);
   }
 
   private allUsers(): User[] {

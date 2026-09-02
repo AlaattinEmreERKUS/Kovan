@@ -79,6 +79,19 @@ export class Connection {
         store.reactions.set(reactionKey(event.messageId, event.emoji), event.userIds);
         return;
 
+      case "member.new": {
+        // Upsert: ayni kisi her baglandiginda geliyor, kopya birikmemeli.
+        const i = store.members.findIndex((m) => m.id === event.user.id);
+        if (i < 0) store.members.push(event.user);
+        else store.members[i] = event.user;
+        return;
+      }
+
+      case "member.gone":
+        store.members = store.members.filter((m) => !event.userIds.includes(m.id));
+        for (const id of event.userIds) store.online.delete(id);
+        return;
+
       case "presence.update":
         if (event.online) store.online.add(event.userId);
         else store.online.delete(event.userId);
