@@ -1,52 +1,87 @@
 <script lang="ts">
   import { voice } from "$lib/voice.svelte";
+  import type { GorunumModu } from "$lib/gorunum";
+  import Icon from "./Icon.svelte";
 
-  let { onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen }: {
+  let { mod, onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen, onToggleGorunum, onLeave }: {
+    mod: GorunumModu;
     onToggleMute: () => void;
     onToggleDeafen: () => void;
     onToggleCamera: () => void;
     onToggleScreen: () => void;
+    onToggleGorunum: () => void;
+    onLeave: () => void;
   } = $props();
 </script>
 
-{#if voice.joined}
-  <div class="cubuk">
+<div class="cubuk">
+  <div class="medya">
     <button
+      class="dugme"
       class:kapali={voice.muted}
       aria-label={voice.muted ? "Mikrofonu aç" : "Mikrofonu kapat"}
       onclick={onToggleMute}
-    >{voice.muted ? "🔇" : "🎙"}</button>
+    ><Icon ad={voice.muted ? "mik-kapali" : "mik"} /></button>
 
     <button
+      class="dugme"
       class:kapali={voice.deafened}
       aria-label={voice.deafened ? "Kulaklığı aç" : "Kulaklığı kapat"}
       onclick={onToggleDeafen}
-    >🎧</button>
+    ><Icon ad={voice.deafened ? "kulaklik-kapali" : "kulaklik"} /></button>
 
     <button
+      class="dugme"
       class:acik={voice.camera}
       aria-label={voice.camera ? "Kamerayı kapat" : "Kamerayı aç"}
       onclick={onToggleCamera}
-    >📷</button>
+    ><Icon ad={voice.camera ? "kamera" : "kamera-kapali"} /></button>
 
     <button
+      class="dugme"
       class:acik={voice.screen}
       aria-label={voice.screen ? "Ekran paylaşımını durdur" : "Ekran paylaş"}
       onclick={onToggleScreen}
-    >🖥</button>
+    ><Icon ad="ekran" /></button>
   </div>
-{/if}
+
+  <div class="sag">
+    <button
+      class="dugme"
+      class:acik={mod === "video"}
+      aria-label={mod === "video" ? "Herkesi göster" : "Yalnız video açık olanları göster"}
+      onclick={onToggleGorunum}
+    ><Icon ad="gorunum" /></button>
+
+    <span class="ayirac"></span>
+
+    <button class="dugme ayril" aria-label="Odadan ayrıl" onclick={onLeave}>
+      <Icon ad="ayril" />
+    </button>
+  </div>
+</div>
 
 <style>
   .cubuk {
-    display: flex; gap: 4px; margin-top: 10px; padding: 6px;
-    background: var(--zemin-2); border-radius: var(--radius);
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 12px; border-top: 1px solid var(--cizgi);
+    background: var(--zemin-1);
   }
-  button {
-    flex: 1; padding: 6px 0; font-size: 14px;
+  /* Medya dortlusu ortada, gorunum + ayril sagda: en pahali yanlis tiklama
+     "ayril", medya grubundan uzakta ve kirmizi durmali. */
+  .medya { display: flex; gap: 4px; margin: 0 auto; }
+  .sag { display: flex; align-items: center; gap: 4px; }
+
+  .dugme {
+    width: 36px; height: 32px; display: grid; place-items: center;
+    color: var(--metin-2);
     transition: background var(--gecis), color var(--gecis);
   }
-  button:hover { background: var(--zemin-1); }
-  button.kapali { color: var(--tehlike); }
-  button.acik { color: var(--bal-sicak); }
+  .dugme:hover { background: var(--zemin-2); color: var(--metin-1); }
+  .dugme.acik { color: var(--bal-sicak); background: var(--bal-zemin); }
+  .dugme.kapali { color: var(--tehlike); }
+  .dugme.ayril { color: var(--tehlike); }
+  .dugme.ayril:hover { background: rgba(217, 88, 74, 0.14); color: var(--tehlike); }
+
+  .ayirac { width: 1px; height: 20px; background: var(--cizgi); margin: 0 4px; }
 </style>
