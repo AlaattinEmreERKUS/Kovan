@@ -4,6 +4,7 @@ import { bosTracks, localFlags, voice } from "../voice.svelte";
 import { LocalMedia } from "./media";
 import { Mesh } from "./mesh";
 import { Peer, type SignalPayload, type TrackSlot } from "./peer";
+import { SpeakingDetector } from "./speaking";
 
 export interface SessionOptions {
   conn: Connection;
@@ -13,6 +14,8 @@ export interface SessionOptions {
   media?: LocalMedia;
   createPeerConnection?(cfg: RTCConfiguration): RTCPeerConnection;
   fetchImpl?: typeof fetch;
+  /** Node testinde AudioContext yok; disaridan verilebilir. */
+  createAudioContext?(): AudioContext | null;
 }
 
 /** TURN alinamazsa bile kanal acilir; ev aglarinin cogunda STUN yeter. */
@@ -26,6 +29,8 @@ export class VoiceSession {
   private mesh: Mesh | null = null;
   private media: LocalMedia;
   private ice: RTCIceServer[] = YEDEK_ICE;
+  private audioCtx: AudioContext | null = null;
+  private speaking: SpeakingDetector | null = null;
 
   constructor(private o: SessionOptions) {
     this.media = o.media ?? new LocalMedia();
@@ -47,12 +52,25 @@ export class VoiceSession {
     }
 
     this.ice = await this.fetchIce();
+    this.audioCtx = (this.o.createAudioContext ?? (() => new AudioContext()))();
+    if (this.audioCtx) {
+      this.speaking = new SpeakingDetector({
+        ctx: this.audioCtx,
+        onChange: (userId, konusuyor) => {
+          if (konusuyor) voice.speaking.add(userId);
+          else voice.speaking.delete(userId);
+        },
+      });
+      if (this.media.mic) this.speaking.watch(this.o.selfId, this.media.mic);
+    }
+
     this.mesh = new Mesh({
       selfId: this.o.selfId,
       createPeer: (userId, polite) => this.createPeer(userId, polite),
       onPeerGone: (userId) => {
         voice.remote.delete(userId);
         voice.speaking.delete(userId);
+        this.speaking?.unwatch(userId);
       },
     });
 
@@ -69,6 +87,10 @@ export class VoiceSession {
     this.o.conn.send({ t: "voice.leave" });
     this.mesh?.close();
     this.mesh = null;
+    this.speaking?.stop();
+    this.speaking = null;
+    void this.audioCtx?.close();
+    this.audioCtx = null;
     this.media.stopAll();
     voice.joined = false;
     voice.muted = false;
@@ -156,6 +178,7 @@ export class VoiceSession {
     // Yeni nesne yazilir: SvelteMap ayni referansi tekrar set edince
     // aboneleri uyandirmaz.
     voice.remote.set(userId, { ...mevcut, [slot]: track });
+    if (slot === "mic") this.speaking?.watch(userId, track);
     track.addEventListener("ended", () => {
       const simdiki = voice.remote.get(userId);
       if (simdiki?.[slot] === track) voice.remote.set(userId, { ...simdiki, [slot]: null });

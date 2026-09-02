@@ -59,6 +59,8 @@ function kur() {
       pcler.push(pc);
       return pc as unknown as RTCPeerConnection;
     },
+    // Node'da AudioContext yok; konusma gostergesi bu testlerin konusu degil.
+    createAudioContext: () => null,
     fetchImpl: vi.fn(async () => Response.json({
       iceServers: [{ urls: ["stun:stun.cloudflare.com:3478"] }],
     })) as unknown as typeof fetch,

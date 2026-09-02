@@ -86,6 +86,9 @@ test("iki kullanici ses kanalinda gercekten baglanir ve ses akar", async ({ brow
   });
   expect(rms).toBeGreaterThan(0.001);
 
+  // Sahte cihaz surekli ton uretir: karsi tarafta konusma gostergesi yanar.
+  await expect(b.locator("li.konusuyor")).toBeVisible({ timeout: 10_000 });
+
   // Mute karsi tarafta rozet olarak gorunur.
   await a.getByLabel("Mikrofonu kapat").click();
   await expect(b.getByLabel("mikrofonu kapalı")).toBeVisible();
