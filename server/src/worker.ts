@@ -10,6 +10,13 @@ export interface Env {
   KOVAN_DEV?: string;
   /** `wrangler secret put ADMIN_KEY` ile tanimlanir. Davet uretme ucunu korur. */
   ADMIN_KEY?: string;
+  /** Cloudflare Realtime TURN anahtar kimligi. `wrangler secret put TURN_KEY_ID`. */
+  TURN_KEY_ID?: string;
+  /**
+   * Realtime API token. ISTEMCIYE ASLA GITMEZ; yalnizca DO icinden
+   * rtc.live.cloudflare.com a giden istegin Authorization basliginda kullanilir.
+   */
+  TURN_KEY_API_TOKEN?: string;
 }
 
 /**

@@ -7,6 +7,7 @@ import {
   reactionsFor, recentMessages, toggleReaction,
 } from "./messages";
 import { MAX_SIGNAL, VOICE_CAP, sanitizeVoiceFlags, voiceFull, voiceMembers } from "./voice";
+import { iceServers } from "./turn";
 import type { ClientEvent, ServerEvent, User } from "@shared/protocol";
 
 interface UserRow extends Record<string, SqlStorageValue> {
@@ -59,6 +60,13 @@ export class KovanServer implements DurableObject {
       if (!code) return Response.json({ ok: false }, { status: 400 });
       this.sql.exec("INSERT OR IGNORE INTO invites (code) VALUES (?)", code);
       return Response.json({ ok: true });
+    }
+    if (request.method === "GET" && url.pathname === "/api/turn") {
+      // Oturum dogrulamasi burada yapilir: TURN credential uretmek para
+      // harcayan tek cagri, davetsiz kullaniciya acilmaz.
+      const user = await this.authenticate(url.searchParams.get("token") ?? "");
+      if (!user) return new Response("unauthorized", { status: 401 });
+      return Response.json({ iceServers: await iceServers(this.env, user.id) });
     }
     if (url.pathname === "/ws") {
       return this.openSocket(url);
