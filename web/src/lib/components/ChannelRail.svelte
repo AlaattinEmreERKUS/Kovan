@@ -1,10 +1,23 @@
+<script lang="ts">
+  import VoiceChannel from "./VoiceChannel.svelte";
+  import VoiceControls from "./VoiceControls.svelte";
+
+  let { onJoin, onLeave, onToggleMute, onToggleDeafen, onToggleCamera }: {
+    onJoin: () => void;
+    onLeave: () => void;
+    onToggleMute: () => void;
+    onToggleDeafen: () => void;
+    onToggleCamera: () => void;
+  } = $props();
+</script>
+
 <nav>
   <div class="baslik">Kovan</div>
   <ul>
     <li><button class="kanal aktif"><span aria-hidden="true">#</span> genel</button></li>
-    <li><button class="kanal" disabled><span aria-hidden="true">♪</span> sohbet</button></li>
   </ul>
-  <p class="not">Ses kanalı sonraki aşamada açılacak.</p>
+  <VoiceChannel {onJoin} {onLeave} />
+  <VoiceControls {onToggleMute} {onToggleDeafen} {onToggleCamera} />
 </nav>
 
 <style>
@@ -15,8 +28,6 @@
     width: 100%; text-align: left; padding: 6px 8px;
     color: var(--metin-2); transition: background var(--gecis), color var(--gecis);
   }
-  .kanal:hover:not(:disabled) { background: var(--zemin-2); color: var(--metin-1); }
+  .kanal:hover { background: var(--zemin-2); color: var(--metin-1); }
   .kanal.aktif { background: var(--bal-zemin); color: var(--bal-sicak); }
-  .kanal:disabled { color: var(--metin-3); cursor: default; }
-  .not { margin: 14px 6px 0; font-size: 11px; color: var(--metin-3); line-height: 1.4; }
 </style>

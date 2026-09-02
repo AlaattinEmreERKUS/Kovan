@@ -1,15 +1,19 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { goto } from "$app/navigation";
-  import { PUBLIC_WS_URL } from "$env/static/public";
+  import { PUBLIC_API_URL, PUBLIC_WS_URL } from "$env/static/public";
   import { Connection } from "$lib/connection.svelte";
   import { store } from "$lib/store.svelte";
+  import { voice } from "$lib/voice.svelte";
+  import { VoiceSession } from "$lib/rtc/session";
   import ChannelRail from "$lib/components/ChannelRail.svelte";
   import MessageList from "$lib/components/MessageList.svelte";
   import Composer from "$lib/components/Composer.svelte";
   import MemberList from "$lib/components/MemberList.svelte";
+  import RemoteAudio from "$lib/components/RemoteAudio.svelte";
 
   let baglanti: Connection | null = null;
+  let oturum: VoiceSession | null = null;
 
   onMount(() => {
     const token = localStorage.getItem("kovan_token");
@@ -17,7 +21,22 @@
     baglanti = new Connection(PUBLIC_WS_URL, token);
   });
 
-  onDestroy(() => baglanti?.close());
+  // selfId hello gelene kadar bilinmiyor; oturum store.me dolunca kurulur.
+  $effect(() => {
+    if (!baglanti || !store.me || oturum) return;
+    oturum = new VoiceSession({
+      conn: baglanti,
+      selfId: store.me.id,
+      apiUrl: PUBLIC_API_URL,
+      token: localStorage.getItem("kovan_token") ?? "",
+    });
+    if (import.meta.env.DEV) {
+      // Playwright kancasi: yalnizca dev build'de tanimlanir.
+      (window as unknown as { __kovan?: unknown }).__kovan = { oturum, voice };
+    }
+  });
+
+  onDestroy(() => { oturum?.destroy(); baglanti?.close(); });
 
   function gonder(metin: string) {
     baglanti?.send({ t: "msg.send", content: metin, localId: crypto.randomUUID() });
@@ -28,7 +47,13 @@
 </script>
 
 <div class="kabuk">
-  <ChannelRail />
+  <ChannelRail
+    onJoin={() => void oturum?.join()}
+    onLeave={() => oturum?.leave()}
+    onToggleMute={() => oturum?.setMuted(!voice.muted)}
+    onToggleDeafen={() => oturum?.setDeafened(!voice.deafened)}
+    onToggleCamera={() => void oturum?.setCamera(!voice.camera)}
+  />
   <main>
     <header class="ust">
       <span aria-hidden="true">#</span> genel
@@ -40,6 +65,7 @@
     <Composer onSend={gonder} onTyping={() => baglanti?.typing()} />
   </main>
   <MemberList />
+  <RemoteAudio />
 </div>
 
 <style>

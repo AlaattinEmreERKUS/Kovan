@@ -48,7 +48,11 @@ test("iki kullanici gercek zamanli mesajlasir ve tepki verir", async ({ browser 
   const satir = b.locator(".mesaj", { hasText: mesaj });
   await satir.hover();
   await satir.getByLabel("🔥 ekle").click();
-  await expect(a.getByLabel(/🔥 tepkisi, 1 kişi/)).toBeVisible();
+  // Dogrulama da MESAJA baglanmali: yerel wrangler dev veritabani kosular
+  // arasi kaliyor ve sayfadaki eski mesajlarin rozetleri de eslesiyor
+  // (strict mode violation).
+  const satirA = a.locator(".mesaj", { hasText: mesaj });
+  await expect(satirA.getByLabel(/🔥 tepkisi, 1 kişi/)).toBeVisible();
 
   // A yaziyor gostergesi B'de gorunur
   await a.getByLabel("Mesaj yaz").fill("yaz");
