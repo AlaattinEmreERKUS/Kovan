@@ -243,25 +243,20 @@ export class VoiceSession {
       voice.remote.set(userId, { ...mevcut, [slot]: t });
     };
 
-    if (slot === "mic") {
-      yaz(track);
-      this.speaking?.watch(userId, track);
-    } else {
-      // ontrack HER m-line icin atesleniyor: karsi taraf kamerayi hic acmasa
-      // da susturulmus bir cam track'i geliyor. Dogrudan yazsak VideoGrid
-      // herkes icin bos siyah kare cizerdi. Track yalnizca medya aktigi
-      // surece store'da durur.
-      if (!track.muted) yaz(track);
-      track.addEventListener("unmute", () => {
-        yaz(track);
-        if (slot === "screenAudio") this.mixer?.attach(userId, track);
-      });
-      track.addEventListener("mute", () => {
-        yaz(null);
-        if (slot === "screenAudio") this.mixer?.detach(userId);
-      });
-      if (slot === "screenAudio" && !track.muted) this.mixer?.attach(userId, track);
-    }
+    // Track geldigi anda yazilir ve `ended` gelene kadar store'da KALIR.
+    //
+    // Onceden mute/unmute olaylari yuvayi doldurup bosaltiyordu; amac karsi
+    // taraf kamerayi hic acmamisken bos siyah kare cizmemekti. Ama Chrome
+    // mute'u gecici paket kaybinda ve bant genisligi dususunde de atesliyor:
+    // yuva null oluyor, <video> DOM'dan sokuluyor, kare siyaha dusup geri
+    // geliyor. Gozlenen titremenin ikinci kaynagi buydu.
+    //
+    // "Kamera kapali" ile "ag takildi" RTP seviyesinde ayni sinyaldir; ayirt
+    // eden bilgi sunucudan gelen VoiceMember.camera / .screen bayraklaridir.
+    // Gorunurluk karari bu yuzden stage.ts'te o bayraklardan veriliyor.
+    yaz(track);
+    if (slot === "mic") this.speaking?.watch(userId, track);
+    if (slot === "screenAudio") this.mixer?.attach(userId, track);
 
     track.addEventListener("ended", () => {
       yaz(null);

@@ -3,13 +3,31 @@
  * yok, bu yuzden action gerekiyor.
  */
 export function attachStream(node: HTMLMediaElement, track: MediaStreamTrack) {
-  node.srcObject = new MediaStream([track]);
+  bagla(node, track);
   return {
     update(yeni: MediaStreamTrack) {
-      node.srcObject = new MediaStream([yeni]);
+      bagla(node, yeni);
     },
     destroy() {
       node.srcObject = null;
     },
   };
+}
+
+/**
+ * srcObject'e AYNI track'i yeniden yazmak <video>'yu sifirlar: element
+ * readyState 0'a duser ve bir kare boyunca siyah cizer.
+ *
+ * Svelte action update'i "coarse-grained": parametre nesne oldugunda
+ * `safe_not_equal` DAIMA true doner (svelte/internal/client/dom/elements/
+ * actions.js), yani prop her degistiginde update cagriliyor. Sahne kareleri
+ * her konusma bayragi degisiminde (100 ms'lik ornekleme) yeniden turetildigi
+ * icin herkesin videosu birlikte siyah parliyordu. Degisen bir sey yoksa
+ * srcObject'e dokunma.
+ */
+function bagla(node: HTMLMediaElement, track: MediaStreamTrack): void {
+  const mevcut = node.srcObject as MediaStream | null;
+  const izler = typeof mevcut?.getTracks === "function" ? mevcut.getTracks() : null;
+  if (izler && izler.length === 1 && izler[0] === track) return;
+  node.srcObject = new MediaStream([track]);
 }

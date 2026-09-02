@@ -67,6 +67,26 @@ function siralaKendisiOnce(members: readonly VoiceMember[], selfId: string): Voi
   return [...ben, ...digerleri];
 }
 
+/**
+ * Uzak video yuvasi. Track store'da `ended` gelene kadar durur (session.ts);
+ * "yayin acik mi" sorusunu YALNIZCA sunucunun yaydigi bayrak cevaplar.
+ *
+ * Track'in varligina veya `muted` durumuna bakmak yanlis olurdu: kamera
+ * kapatildiginda replaceTrack(null) uzak track'i sonlandirmaz, yalnizca
+ * susturur -- donmus son kare ekranda kalirdi. Ters yonde de Chrome gecici
+ * paket kaybinda mute atesliyor; ona bakan arayuz her tikanmada kareyi
+ * siyaha dusuruyordu.
+ */
+function uzakVideo(
+  g: SahneGirdisi,
+  m: VoiceMember,
+  yuva: "cam" | "screenVideo",
+  acik: boolean,
+): MediaStreamTrack | null {
+  if (!acik) return null;
+  return g.remote.get(m.userId)?.[yuva] ?? null;
+}
+
 export function sahneKareleri(g: SahneGirdisi): Kare[] {
   const sirali = siralaKendisiOnce(g.members, g.selfId);
   const adOf = (userId: string) => g.adlar.get(userId) ?? AD_YOK;
@@ -75,7 +95,7 @@ export function sahneKareleri(g: SahneGirdisi): Kare[] {
   const ekranlar: EkranKare[] = [];
   for (const m of sirali) {
     const kendisi = m.userId === g.selfId;
-    const track = kendisi ? g.local.screenVideo : g.remote.get(m.userId)?.screenVideo ?? null;
+    const track = kendisi ? g.local.screenVideo : uzakVideo(g, m, "screenVideo", m.screen);
     if (!track) continue;
     ekranlar.push({
       tur: "ekran",
@@ -90,7 +110,7 @@ export function sahneKareleri(g: SahneGirdisi): Kare[] {
   const kisiler: KisiKare[] = [];
   for (const m of sirali) {
     const kendisi = m.userId === g.selfId;
-    const track = kendisi ? g.local.cam : g.remote.get(m.userId)?.cam ?? null;
+    const track = kendisi ? g.local.cam : uzakVideo(g, m, "cam", m.camera);
     // "video" modu yalnizca kisi karelerini eler; ekran paylasimi her zaman gorunur.
     if (g.mod === "video" && track === null) continue;
     const ad = adOf(m.userId);

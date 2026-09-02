@@ -69,6 +69,7 @@ describe("sahneKareleri sirasi", () => {
 
   it("ekran kareleri kisi karelerinden once gelir", () => {
     const k = sahneKareleri(girdi({
+      members: [uye("ben"), uye("o", { screen: true })],
       remote: new Map([["o", uzak({ screenVideo: track() })]]),
     }));
     expect(k[0]).toMatchObject({ tur: "ekran", userId: "o" });
@@ -95,7 +96,10 @@ describe("sahneKareleri kisi karesi", () => {
 
   it("uzak kamera remote'tan gelir", () => {
     const t = track();
-    const k = sahneKareleri(girdi({ remote: new Map([["o", uzak({ cam: t })]]) }));
+    const k = sahneKareleri(girdi({
+      members: [uye("ben"), uye("o", { camera: true })],
+      remote: new Map([["o", uzak({ cam: t })]]),
+    }));
     expect(k[1]).toMatchObject({ userId: "o", track: t });
   });
 
@@ -149,6 +153,7 @@ describe("sahneKareleri gorunum modu", () => {
   it("video modunda videosuz kisi kareleri dusurulur", () => {
     const t = track();
     const k = sahneKareleri(girdi({
+      members: [uye("ben"), uye("o", { camera: true })],
       remote: new Map([["o", uzak({ cam: t })]]),
       mod: "video",
     }));
@@ -157,6 +162,7 @@ describe("sahneKareleri gorunum modu", () => {
 
   it("video modunda ekran kareleri her zaman kalir", () => {
     const k = sahneKareleri(girdi({
+      members: [uye("ben"), uye("o", { screen: true })],
       remote: new Map([["o", uzak({ screenVideo: track() })]]),
       mod: "video",
     }));
@@ -170,5 +176,60 @@ describe("sahneKareleri gorunum modu", () => {
 
   it("herkes modunda videosuzlar kalir", () => {
     expect(sahneKareleri(girdi({ mod: "herkes" }))).toHaveLength(2);
+  });
+});
+
+describe("sahneKareleri gorunurluk bayraklari", () => {
+  // Track store'da `ended` gelene kadar duruyor (rtc/session.ts). Kameranin
+  // acik olup olmadigini yalnizca sunucunun yaydigi bayrak soyler; track'in
+  // varligina bakmak gecici paket kaybini "kamera kapandi" gibi okur.
+  it("kamera bayragi kapaliyken uzak track cizilmez", () => {
+    const k = sahneKareleri(girdi({
+      members: [uye("ben"), uye("o", { camera: false })],
+      remote: new Map([["o", uzak({ cam: track() })]]),
+    }));
+    expect(k[1]).toMatchObject({ userId: "o", track: null, harf: "A" });
+  });
+
+  it("kamera bayragi acikken uzak track cizilir", () => {
+    const t = track();
+    const k = sahneKareleri(girdi({
+      members: [uye("ben"), uye("o", { camera: true })],
+      remote: new Map([["o", uzak({ cam: t })]]),
+    }));
+    expect(k[1]).toMatchObject({ userId: "o", track: t });
+  });
+
+  it("bayrak acik ama track henuz yoksa harf cizilir", () => {
+    const k = sahneKareleri(girdi({
+      members: [uye("ben"), uye("o", { camera: true })],
+    }));
+    expect(k[1]).toMatchObject({ userId: "o", track: null });
+  });
+
+  it("ekran bayragi kapaliyken uzak ekran karesi uretilmez", () => {
+    const k = sahneKareleri(girdi({
+      members: [uye("ben"), uye("o", { screen: false })],
+      remote: new Map([["o", uzak({ screenVideo: track() })]]),
+    }));
+    expect(k.every((x) => x.tur === "kisi")).toBe(true);
+  });
+
+  it("ekran bayragi acikken uzak ekran karesi uretilir", () => {
+    const k = sahneKareleri(girdi({
+      members: [uye("ben"), uye("o", { screen: true })],
+      remote: new Map([["o", uzak({ screenVideo: track() })]]),
+    }));
+    expect(k[0]).toMatchObject({ tur: "ekran", userId: "o" });
+  });
+
+  it("kendi karen bayraga degil yerel track'e bakar", () => {
+    // Kendi bayragin sunucu yankisiyla bir tur gecikir; onizleme gecikmemeli.
+    const t = track();
+    const k = sahneKareleri(girdi({
+      members: [uye("ben", { camera: false }), uye("o")],
+      local: { cam: t, screenVideo: null },
+    }));
+    expect(k[0]).toMatchObject({ kendisi: true, track: t });
   });
 });

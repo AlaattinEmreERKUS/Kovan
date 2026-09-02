@@ -354,3 +354,60 @@ describe("voice.local yerel track yuzeyi", () => {
     expect(voice.local).not.toBe(once);
   });
 });
+
+/** Dinleyicileri saklayan track: "mute"/"ended" testte tetiklenebilir. */
+function izliTrack(kind: "audio" | "video" = "video", muted = false) {
+  const dinleyiciler = new Map<string, Array<() => void>>();
+  const t = {
+    kind, enabled: true, muted, stop: vi.fn(),
+    addEventListener(ad: string, fn: () => void) {
+      const liste = dinleyiciler.get(ad) ?? [];
+      liste.push(fn);
+      dinleyiciler.set(ad, liste);
+    },
+  };
+  return {
+    track: t as unknown as MediaStreamTrack,
+    ates(ad: string) { for (const fn of dinleyiciler.get(ad) ?? []) fn(); },
+  };
+}
+
+describe("VoiceSession uzak track yonetimi", () => {
+  /** u1 ile baglanti kurar ve verilen yuvaya track dusurur. */
+  async function baglaVeGonder(slotIndex: number, muted = false) {
+    const { session, conn, pcler } = kur();
+    await session.join();
+    conn.onVoiceMembers!([{ userId: "u1" }, { userId: "u2" }]);
+    const pc = pcler[0];
+    const { track, ates } = izliTrack("video", muted);
+    pc.ontrack!({ transceiver: pc.transceivers[slotIndex], track });
+    return { session, ates, track };
+  }
+
+  it("uzak kamera track'i geldigi anda store'a yazilir", async () => {
+    const { track } = await baglaVeGonder(1);
+    expect(voice.remote.get("u1")?.cam).toBe(track);
+  });
+
+  it("track muted gelse bile store'a yazilir", async () => {
+    // Gorunurluk artik VoiceMember.camera bayragindan geliyor; store yalnizca
+    // "bu yuvada bir track var mi" sorusunu cevaplar.
+    const { track } = await baglaVeGonder(1, true);
+    expect(voice.remote.get("u1")?.cam).toBe(track);
+  });
+
+  it("mute olayi track'i store'dan DUSURMEZ", async () => {
+    // Chrome mute'u gecici paket kaybinda da atesliyor. Yuvayi null'larsak
+    // <video> DOM'dan sokuluyor ve kare siyaha dusuyor (titreme hatasi).
+    const { ates } = await baglaVeGonder(1);
+    const once = voice.remote.get("u1")?.cam;
+    ates("mute");
+    expect(voice.remote.get("u1")?.cam).toBe(once);
+  });
+
+  it("ended olayi yuvayi bosaltir", async () => {
+    const { ates } = await baglaVeGonder(1);
+    ates("ended");
+    expect(voice.remote.get("u1")?.cam).toBeNull();
+  });
+});
