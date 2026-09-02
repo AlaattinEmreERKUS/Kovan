@@ -17,7 +17,8 @@
   import type { ShareOptions } from "$lib/rtc/share";
 
   let baglanti: Connection | null = null;
-  let oturum: VoiceSession | null = null;
+  // $state sart: oturum atandiginda VideoGrid'in mixer prop'u guncellenmeli.
+  let oturum = $state<VoiceSession | null>(null);
   let paylasimDiyalogu = $state(false);
 
   function ekranDugmesi() {
@@ -78,7 +79,7 @@
       {/if}
     </header>
     <ShareBanner onStop={() => oturum?.stopScreen()} />
-    <VideoGrid />
+    <VideoGrid mixer={oturum?.mixer ?? null} />
     <MessageList onToggleReaction={tepki} />
     <Composer onSend={gonder} onTyping={() => baglanti?.typing()} />
   </main>

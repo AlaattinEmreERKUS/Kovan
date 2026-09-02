@@ -2,6 +2,9 @@
   import { store } from "$lib/store.svelte";
   import { voice } from "$lib/voice.svelte";
   import VideoTile from "./VideoTile.svelte";
+  import type { ScreenAudioMixer } from "$lib/rtc/gain";
+
+  let { mixer }: { mixer: ScreenAudioMixer | null } = $props();
 
   const adlar = $derived(new Map(store.members.map((m) => [m.id, m.displayName])));
 
@@ -31,7 +34,7 @@
 {#if kareler.length > 0}
   <div class="izgara">
     {#each kareler as k (k.anahtar)}
-      <VideoTile track={k.track} label={k.label} kind={k.kind} userId={k.userId} />
+      <VideoTile track={k.track} label={k.label} kind={k.kind} userId={k.userId} {mixer} />
     {/each}
   </div>
 {/if}

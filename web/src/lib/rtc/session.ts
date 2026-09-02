@@ -6,6 +6,7 @@ import { Mesh } from "./mesh";
 import { Peer, type SignalPayload, type TrackSlot } from "./peer";
 import { SpeakingDetector } from "./speaking";
 import type { ShareOptions } from "./share";
+import { ScreenAudioMixer } from "./gain";
 
 export interface SessionOptions {
   conn: Connection;
@@ -32,6 +33,8 @@ export class VoiceSession {
   private ice: RTCIceServer[] = YEDEK_ICE;
   private audioCtx: AudioContext | null = null;
   private speaking: SpeakingDetector | null = null;
+  /** Arayuz kaydiriciyi buradan okur; kisiye ozel, sunucuya gitmez. */
+  mixer: ScreenAudioMixer | null = null;
 
   constructor(private o: SessionOptions) {
     this.media = o.media ?? new LocalMedia();
@@ -63,6 +66,8 @@ export class VoiceSession {
         },
       });
       if (this.media.mic) this.speaking.watch(this.o.selfId, this.media.mic);
+      this.mixer = new ScreenAudioMixer(this.audioCtx);
+      this.mixer.setDeafened(voice.deafened);
     }
 
     this.mesh = new Mesh({
@@ -72,6 +77,7 @@ export class VoiceSession {
         voice.remote.delete(userId);
         voice.speaking.delete(userId);
         this.speaking?.unwatch(userId);
+        this.mixer?.detach(userId);
       },
     });
 
@@ -90,6 +96,8 @@ export class VoiceSession {
     this.mesh = null;
     this.speaking?.stop();
     this.speaking = null;
+    this.mixer?.close();
+    this.mixer = null;
     void this.audioCtx?.close();
     this.audioCtx = null;
     this.media.stopAll();
@@ -118,6 +126,7 @@ export class VoiceSession {
       voice.muted = true;
       this.media.setMuted(true);
     }
+    this.mixer?.setDeafened(deafened);
     this.publish();
   }
 
@@ -219,6 +228,7 @@ export class VoiceSession {
     // aboneleri uyandirmaz.
     voice.remote.set(userId, { ...mevcut, [slot]: track });
     if (slot === "mic") this.speaking?.watch(userId, track);
+    if (slot === "screenAudio") this.mixer?.attach(userId, track);
     track.addEventListener("ended", () => {
       const simdiki = voice.remote.get(userId);
       if (simdiki?.[slot] === track) voice.remote.set(userId, { ...simdiki, [slot]: null });
