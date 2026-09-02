@@ -17,17 +17,34 @@ export interface ReactionState {
   userIds: string[];
 }
 
+export interface VoiceMember {
+  userId: string;
+  muted: boolean;
+  deafened: boolean;
+  camera: boolean;
+  /** Ekran paylasiyor mu. */
+  screen: boolean;
+  /** Ekranla birlikte sistem sesi de gidiyor mu (spec 8.1). */
+  screenAudio: boolean;
+}
+
 export type ClientEvent =
   | { t: "msg.send"; content: string; localId: string }
   | { t: "reaction.toggle"; messageId: number; emoji: string }
   | { t: "typing" }
-  | { t: "sync"; lastMessageId: number };
+  | { t: "sync"; lastMessageId: number }
+  | { t: "voice.join" }
+  | { t: "voice.leave" }
+  | { t: "voice.state"; muted: boolean; deafened: boolean; camera: boolean; screen: boolean; screenAudio: boolean }
+  | { t: "signal"; target: string; data: unknown };
 
 export type ServerEvent =
-  | { t: "hello"; me: User; members: User[]; recentMessages: Message[]; reactions: ReactionState[]; online: string[] }
+  | { t: "hello"; me: User; members: User[]; recentMessages: Message[]; reactions: ReactionState[]; online: string[]; voiceMembers: VoiceMember[] }
   | { t: "msg.new"; message: Message; localId?: string }
   | { t: "reaction.update"; messageId: number; emoji: string; userIds: string[] }
   | { t: "presence.update"; userId: string; online: boolean }
   | { t: "typing"; userId: string }
   | { t: "sync.result"; messages: Message[] }
+  | { t: "voice.members"; members: VoiceMember[] }
+  | { t: "signal"; from: string; data: unknown }
   | { t: "error"; code: string; message: string };
