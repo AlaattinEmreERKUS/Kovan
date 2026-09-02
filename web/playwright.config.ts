@@ -5,6 +5,9 @@ export default defineConfig({
   // Canli duman testi ayri config ile kosulur (playwright.prod.config.ts).
   testIgnore: /prod-smoke\.spec\.ts/,
   timeout: 30_000,
+  // Tek DO, TEK ses kanali var. Paralel kosan iki test ayni kanala girip
+  // birbirinin uye sayacini bozuyor ("2/4" beklerken 3/4 goruyor).
+  workers: 1,
   use: {
     baseURL: "http://127.0.0.1:5173",
     permissions: ["microphone", "camera"],

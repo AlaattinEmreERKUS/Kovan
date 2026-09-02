@@ -65,7 +65,12 @@ test("iki kullanici ses kanalinda gercekten baglanir ve ses akar", async ({ brow
   });
   expect(uzakDurum).toBe("live");
 
-  // Chromium sahte cihazi ton uretir: karsi tarafta RMS sifirdan buyuk olmali.
+  // Once uygulamanin KENDI gostergesi: sesin aktiginin birinci kanitidir.
+  // Asagidaki ham olcum ayni uzak track'ten ikinci bir AudioContext kaynagi
+  // acar ve uygulamanin analizini ac birakir; bu yuzden once bu gelir.
+  await expect(b.locator("li.konusuyor")).toBeVisible({ timeout: 10_000 });
+
+  // Bagimsiz ikinci kanit: ham RMS sifirdan buyuk olmali.
   const rms = await b.evaluate(async () => {
     const v = (window as unknown as { __kovan: { voice: { remote: Map<string, { mic: MediaStreamTrack | null }> } } }).__kovan.voice;
     const track = [...v.remote.values()][0].mic!;
@@ -85,9 +90,6 @@ test("iki kullanici ses kanalinda gercekten baglanir ve ses akar", async ({ brow
     return enYuksek;
   });
   expect(rms).toBeGreaterThan(0.001);
-
-  // Sahte cihaz surekli ton uretir: karsi tarafta konusma gostergesi yanar.
-  await expect(b.locator("li.konusuyor")).toBeVisible({ timeout: 10_000 });
 
   // Mute karsi tarafta rozet olarak gorunur.
   await a.getByLabel("Mikrofonu kapat").click();

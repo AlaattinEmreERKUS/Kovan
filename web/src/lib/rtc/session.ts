@@ -58,6 +58,10 @@ export class VoiceSession {
     this.ice = await this.fetchIce();
     this.audioCtx = (this.o.createAudioContext ?? (() => new AudioContext()))();
     if (this.audioCtx) {
+      // AudioContext tarayici politikasi geregi "suspended" baslayabilir.
+      // Devam ettirilmezse AnalyserNode sifir doner (konusma gostergesi olur)
+      // ve GainNode zincirinden ses cikmaz (ekran sesi duyulmaz).
+      void this.audioCtx.resume().catch(() => {});
       this.speaking = new SpeakingDetector({
         ctx: this.audioCtx,
         onChange: (userId, konusuyor) => {
@@ -223,15 +227,37 @@ export class VoiceSession {
   }
 
   private onRemoteTrack(userId: string, slot: TrackSlot, track: MediaStreamTrack): void {
-    const mevcut = voice.remote.get(userId) ?? bosTracks();
     // Yeni nesne yazilir: SvelteMap ayni referansi tekrar set edince
     // aboneleri uyandirmaz.
-    voice.remote.set(userId, { ...mevcut, [slot]: track });
-    if (slot === "mic") this.speaking?.watch(userId, track);
-    if (slot === "screenAudio") this.mixer?.attach(userId, track);
+    const yaz = (t: MediaStreamTrack | null) => {
+      const mevcut = voice.remote.get(userId) ?? bosTracks();
+      if (mevcut[slot] === t) return;
+      voice.remote.set(userId, { ...mevcut, [slot]: t });
+    };
+
+    if (slot === "mic") {
+      yaz(track);
+      this.speaking?.watch(userId, track);
+    } else {
+      // ontrack HER m-line icin atesleniyor: karsi taraf kamerayi hic acmasa
+      // da susturulmus bir cam track'i geliyor. Dogrudan yazsak VideoGrid
+      // herkes icin bos siyah kare cizerdi. Track yalnizca medya aktigi
+      // surece store'da durur.
+      if (!track.muted) yaz(track);
+      track.addEventListener("unmute", () => {
+        yaz(track);
+        if (slot === "screenAudio") this.mixer?.attach(userId, track);
+      });
+      track.addEventListener("mute", () => {
+        yaz(null);
+        if (slot === "screenAudio") this.mixer?.detach(userId);
+      });
+      if (slot === "screenAudio" && !track.muted) this.mixer?.attach(userId, track);
+    }
+
     track.addEventListener("ended", () => {
-      const simdiki = voice.remote.get(userId);
-      if (simdiki?.[slot] === track) voice.remote.set(userId, { ...simdiki, [slot]: null });
+      yaz(null);
+      if (slot === "screenAudio") this.mixer?.detach(userId);
     });
   }
 
