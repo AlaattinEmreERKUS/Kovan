@@ -17,6 +17,8 @@ export interface SpeakingOptions {
 interface Izleme {
   analyser: AnalyserNode;
   source: MediaStreamAudioSourceNode;
+  /** Kaynagi biz mi actik: mikserden odunc alinan kaynak KAPATILMAZ. */
+  sahip: boolean;
   /** getFloatTimeDomainData ArrayBuffer destekli tampon istiyor. */
   buffer: Float32Array<ArrayBuffer>;
   speaking: boolean;
@@ -35,17 +37,33 @@ export class SpeakingDetector {
 
   constructor(private o: SpeakingOptions) {}
 
+  /** Kendi mikrofonun gibi, baska kimsenin kullanmadigi bir track icin. */
   watch(userId: string, track: MediaStreamTrack): void {
-    this.unwatch(userId);
     const stream = (this.o.makeStream ?? ((t: MediaStreamTrack) => new MediaStream([t])))(track);
-    const source = this.o.ctx.createMediaStreamSource(stream);
+    this.baglan(userId, this.o.ctx.createMediaStreamSource(stream), true);
+  }
+
+  /**
+   * Zaten acik bir kaynagi PAYLASARAK izler.
+   *
+   * Ayni track icin ayni AudioContext'te ikinci bir MediaStreamAudioSource
+   * acmak Chrome'da ikincisine SESSIZLIK verir: uzak mikrofonlar mikserden
+   * gectikten sonra gosterge tam olarak boyle oldu -- ses duyuluyor, ham
+   * RMS 0.3 okunuyor, ama gostergenin analyser'i sifir goruyordu.
+   */
+  watchSource(userId: string, source: MediaStreamAudioSourceNode): void {
+    this.baglan(userId, source, false);
+  }
+
+  private baglan(userId: string, source: MediaStreamAudioSourceNode, sahip: boolean): void {
+    this.unwatch(userId);
     const analyser = this.o.ctx.createAnalyser();
     analyser.fftSize = 2048;
     source.connect(analyser);
     // Analyser destination'a BAGLANMAZ: baglanirsa kendi sesimiz hoparlorden
     // geri caliniyor ve mesh'e yanki olarak donuyor.
     this.izlemeler.set(userId, {
-      analyser, source, buffer: new Float32Array(analyser.fftSize), speaking: false,
+      analyser, source, sahip, buffer: new Float32Array(analyser.fftSize), speaking: false,
     });
     this.basla();
   }
@@ -53,7 +71,10 @@ export class SpeakingDetector {
   unwatch(userId: string): void {
     const izleme = this.izlemeler.get(userId);
     if (!izleme) return;
-    izleme.source.disconnect();
+    // Odunc kaynak mikserin: disconnect edersek sesi de keseriz. Yalnizca
+    // kendi analyser baglantimizi cozeriz.
+    if (izleme.sahip) izleme.source.disconnect();
+    else izleme.source.disconnect(izleme.analyser);
     izleme.analyser.disconnect();
     this.izlemeler.delete(userId);
     if (this.izlemeler.size === 0) this.dur();

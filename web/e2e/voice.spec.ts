@@ -36,7 +36,12 @@ test("iki kullanici ses kanalinda gercekten baglanir ve ses akar", async ({ brow
   // Once uygulamanin KENDI gostergesi: sesin aktiginin birinci kanitidir.
   // Asagidaki ham olcum ayni uzak track'ten ikinci bir AudioContext kaynagi
   // acar ve uygulamanin analizini ac birakir; bu yuzden once bu gelir.
-  await expect(b.locator("li.konusuyor")).toBeVisible({ timeout: 10_000 });
+  // KARSI TARAFIN satiri isaretlenmeli. Yalnizca "bir tane konusuyor var"
+  // demek yeterli degildi: kendi mikrofonun her zaman konusuyor gorunur ve
+  // uzak taraf sessiz okunurken de test geciyordu.
+  await expect(
+    b.getByRole("navigation").getByRole("listitem").filter({ hasText: `Sesli${damga}` })
+  ).toHaveClass(/konusuyor/, { timeout: 10_000 });
 
   // Bagimsiz ikinci kanit: ham RMS sifirdan buyuk olmali.
   const rms = await b.evaluate(async () => {

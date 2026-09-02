@@ -3,6 +3,7 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { fileURLToPath } from "node:url";
 
 export default defineConfig({
+  define: { __KOVAN_SURUM__: JSON.stringify("test") },
   plugins: [svelte()],
   resolve: {
     alias: {

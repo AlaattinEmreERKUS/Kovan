@@ -2,16 +2,14 @@
   import { store } from "$lib/store.svelte";
   import { voice } from "$lib/voice.svelte";
   import { sahneDuzeni } from "$lib/stage";
+  import { izgaraOlcusu } from "$lib/izgara";
   import { gorunumOku, gorunumYaz, type GorunumModu } from "$lib/gorunum";
-  import type { RemoteAudioMixer } from "$lib/rtc/gain";
   import StageTile from "./StageTile.svelte";
   import VideoTile from "./VideoTile.svelte";
   import VoiceControls from "./VoiceControls.svelte";
 
-  let { selfId, mixer, micMixer, onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen, onLeave }: {
+  let { selfId, onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen, onLeave }: {
     selfId: string;
-    mixer: RemoteAudioMixer | null;
-    micMixer: RemoteAudioMixer | null;
     onToggleMute: () => void;
     onToggleDeafen: () => void;
     onToggleCamera: () => void;
@@ -57,6 +55,11 @@
   /** Ekran paylasiliyorsa kisiler serite iner; yoksa ana alanda galeri olur. */
   const seritte = $derived(duzen.ekranlar.length > 0);
 
+  // Galeri olculeri: sutun sayisi genislik VE yukseklikten turetiliyor.
+  let alanEn = $state(0);
+  let alanBoy = $state(0);
+  const olcu = $derived(izgaraOlcusu(duzen.kisiler.length, alanEn, alanBoy));
+
   function tusla(e: KeyboardEvent) {
     if (e.key === "Escape" && buyutulen !== null) buyutulen = null;
   }
@@ -65,7 +68,13 @@
 <svelte:window onkeydown={tusla} />
 
 <section class="sahne" data-buyuk={buyukKare !== null}>
-  <div class="alan" data-alan="ana" class:galeri={!seritte}>
+  <div
+    class="alan"
+    data-alan="ana"
+    class:galeri={!seritte}
+    bind:clientWidth={alanEn}
+    bind:clientHeight={alanBoy}
+  >
     {#if duzen.ekranlar.length === 0 && duzen.kisiler.length === 0}
       <!-- Bos siyah alan bozukluk gibi okunur; sebebini yaz. -->
       <p class="bos">Kimsenin kamerası açık değil.</p>
@@ -76,16 +85,16 @@
             track={e.track}
             label={e.kendisi ? `${e.ad} — ekranın` : `${e.ad} — ekran`}
             userId={e.userId}
-            mixer={e.kendisi ? null : mixer}
+            mixer={e.kendisi ? null : voice.ekranMikseri}
             buyuk={buyutulen === e.anahtar}
             onBuyut={() => (buyutulen = buyutulen === e.anahtar ? null : e.anahtar)}
           />
         {/each}
       </div>
     {:else}
-      <div class="izgara">
+      <div class="izgara" style="--sutun: {olcu.sutun}">
         {#each duzen.kisiler as k (k.anahtar)}
-          <StageTile kare={k} {micMixer} />
+          <div class="hucre"><StageTile kare={k} micMixer={voice.mikMikseri} /></div>
         {/each}
       </div>
     {/if}
@@ -94,7 +103,7 @@
   {#if seritte && duzen.kisiler.length > 0 && buyukKare === null}
     <div class="serit" data-alan="serit">
       {#each duzen.kisiler as k (k.anahtar)}
-        <div class="seritKare"><StageTile kare={k} {micMixer} /></div>
+        <div class="seritKare"><StageTile kare={k} micMixer={voice.mikMikseri} /></div>
       {/each}
     </div>
   {/if}
@@ -126,7 +135,8 @@
     flex: 1; min-height: 0; display: flex; flex-direction: column;
     padding: 14px 16px;
   }
-  .alan.galeri { overflow-y: auto; }
+  /* Galeri KAYMAZ: kareler alana sigacak sekilde kucululur (Discord gibi). */
+  .alan.galeri { overflow: hidden; }
 
   /* Ekranlar ana alanin TAMAMINI kaplar: yukseklik alandan gelir. */
   .ekranlar {
@@ -143,10 +153,14 @@
     aciliyordu.
   */
   .izgara {
+    flex: 1; min-height: 0;
     display: grid; gap: 10px;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    align-content: start;
+    grid-template-columns: repeat(var(--sutun), minmax(0, 1fr));
+    grid-auto-rows: minmax(0, 1fr);
   }
+  /* Kare hucrenin ORTASINDA ve oranini koruyarak buyur. */
+  .hucre { display: grid; place-items: center; min-width: 0; min-height: 0; }
+  .hucre :global(figure) { max-width: 100%; max-height: 100%; width: 100%; }
 
   /* Serit: sabit yukseklikte, tasarsa yatay kayan kisi kareleri. */
   .serit {

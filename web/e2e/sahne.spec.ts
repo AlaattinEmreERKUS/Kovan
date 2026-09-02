@@ -88,6 +88,16 @@ test("kisi sesi tek tek ayarlanir ve kalici olur", async ({ browser }) => {
   await b.getByLabel("Ses kanalına katıl").click();
   await baglandi(a);
 
+  // Mikser calisiyorsa yedek <audio> HIC olmamali. Ikisi birden calarsa ses
+  // iki yoldan gelir: kulaga yanki gibi gelir ve kaydirici hicbir sey
+  // yapmaz -- gain 0 olsa bile element sesi devam eder.
+  expect(await a.evaluate(() => ({
+    mikser: Boolean((window as unknown as {
+      __kovan: { voice: { mikMikseri: unknown } };
+    }).__kovan.voice.mikMikseri),
+    yedekAudio: document.querySelectorAll('audio[data-kovan="yedek"]').length,
+  }))).toEqual({ mikser: true, yedekAudio: 0 });
+
   // Kendi karende ses ayari YOK: kendi sesin zaten calinmiyor.
   const bAd = `Kisilan${damga}`;
   await expect(a.getByLabel(`${bAd} mikrofon seviyesi`)).toHaveCount(1);
@@ -100,14 +110,62 @@ test("kisi sesi tek tek ayarlanir ve kalici olur", async ({ browser }) => {
   const bId = await b.evaluate(() =>
     (window as unknown as { __kovan: { oturum: { o: { selfId: string } } } }).__kovan.oturum.o.selfId);
   expect(await a.evaluate((id) => (window as unknown as {
-    __kovan: { oturum: { micMixer: { volumeOf(u: string): number } } };
-  }).__kovan.oturum.micMixer.volumeOf(id), bId)).toBe(40);
+    __kovan: { voice: { mikMikseri: { volumeOf(u: string): number } } };
+  }).__kovan.voice.mikMikseri.volumeOf(id), bId)).toBe(40);
 
   // Yenilemeden sonra da ayni seviye.
   await a.reload();
   await expect(a.locator("article").first()).toBeVisible({ timeout: 10_000 });
   await a.getByLabel("Ses kanalına katıl").click();
   await expect(a.getByLabel(`${bAd} mikrofon seviyesi`)).toHaveValue("40");
+
+  await ctxA.close();
+  await ctxB.close();
+});
+
+test("kameralar alani doldurur, kare sayisina gore yayilir", async ({ browser }) => {
+  const damga = Date.now();
+  await davetUret(`K5-${damga}`);
+  await davetUret(`K6-${damga}`);
+
+  const ctxA = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+  const ctxB = await browser.newContext();
+  const a = await ctxA.newPage();
+  const b = await ctxB.newPage();
+
+  await kayitOl(a, `K5-${damga}`, `Genis${damga}`);
+  await kayitOl(b, `K6-${damga}`, `Ikinci${damga}`);
+
+  await a.getByLabel("Ses kanalına katıl").click();
+  await expect(a.locator('[data-kare="kisi"]')).toHaveCount(1);
+
+  // Tek kare: ana alanin BUYUK bir kismini kaplamali (eskiden 240px'lik
+  // minmax yuzunden ustte kucuk duruyordu).
+  const tek = await a.locator('[data-kare="kisi"]').boundingBox();
+  const alan = await a.locator('[data-alan="ana"]').boundingBox();
+  expect(tek!.height).toBeGreaterThan(alan!.height * 0.7);
+
+  // Ikinci kisi girince kareler kuculur ama ikisi de gorunur kalir; alan
+  // KAYMAZ (galeri overflow:hidden).
+  await b.getByLabel("Ses kanalına katıl").click();
+  await expect(a.locator('[data-kare="kisi"]')).toHaveCount(2);
+  const kutular = await a.locator('[data-kare="kisi"]').all();
+  const olculer = await Promise.all(kutular.map((k) => k.boundingBox()));
+  for (const o of olculer) {
+    expect(o!.height).toBeGreaterThan(0);
+    expect(o!.y + o!.height).toBeLessThanOrEqual(alan!.y + alan!.height + 1);
+  }
+  // Duzen ALANI DOLDURUR: iki kare de alanin ucte birinden buyuk kalir.
+  // Hangi dizilim oldugu alanin oranina bagli (kisa-genis alanda alt alta
+  // olmak daha buyuk kare verir) -- karar izgaraOlcusu'nun, birim testi var.
+  for (const o of olculer) {
+    expect(o!.height).toBeGreaterThan(alan!.height * 0.33);
+  }
+  // Kareler ust uste binmez.
+  const [k1, k2] = olculer.map((o) => o!);
+  const ayri = k1.y + k1.height <= k2.y + 1 || k2.y + k2.height <= k1.y + 1
+    || k1.x + k1.width <= k2.x + 1 || k2.x + k2.width <= k1.x + 1;
+  expect(ayri).toBe(true);
 
   await ctxA.close();
   await ctxB.close();

@@ -71,9 +71,51 @@
       // Playwright kancasi: yalnizca dev build'de tanimlanir.
       (window as unknown as { __kovan?: unknown }).__kovan = { oturum, voice };
     }
+    // Uretimde de duran TESHIS ciktisi. Canlida gorulen ama yerelde
+    // uretilemeyen hatalarin (kamera kayboluyor, ekran gorunmuyor) tek
+    // kaniti bu: konsola `kovanDurum()` yazip ciktisi paylasiliyor.
+    // Yalnizca OKUR; token ya da parola icermez.
+    (window as unknown as { kovanDurum?: unknown }).kovanDurum = () => ({
+      surum: __KOVAN_SURUM__,
+      api: PUBLIC_API_URL,
+      sekme: aktifSekme,
+      joined: voice.joined,
+      bayraklarim: {
+        muted: voice.muted, deafened: voice.deafened,
+        camera: voice.camera, screen: voice.screen, screenAudio: voice.screenAudio,
+      },
+      yerelTrackler: {
+        cam: izDurumu(voice.local.cam),
+        screenVideo: izDurumu(voice.local.screenVideo),
+      },
+      sunucununGorduguUyeler: voice.members,
+      uzakTrackler: [...voice.remote.entries()].map(([id, t]) => ({
+        userId: id,
+        mic: izDurumu(t.mic), cam: izDurumu(t.cam),
+        screenVideo: izDurumu(t.screenVideo), screenAudio: izDurumu(t.screenAudio),
+      })),
+      baglantiDurumu: [...voice.connection.entries()],
+      mikserler: {
+        ekran: voice.ekranMikseri !== null,
+        mikrofon: voice.mikMikseri !== null,
+        yedekAudioElementi: document.querySelectorAll('audio[data-kovan="yedek"]').length,
+        mikserPompasi: document.querySelectorAll('audio[data-kovan="mikser"]').length,
+      },
+      cizilen: {
+        kisiKaresi: document.querySelectorAll('[data-kare="kisi"]').length,
+        ekranKaresi: document.querySelectorAll('[data-kare="ekran"]').length,
+        video: document.querySelectorAll('[data-kare] video').length,
+      },
+      gorunum: localStorage.getItem("kovan_gorunum"),
+    });
   });
 
   onDestroy(() => { oturum?.destroy(); baglanti?.close(); });
+
+  /** Teshis ciktisi icin tek satirlik ozet; track yoksa null. */
+  function izDurumu(t: MediaStreamTrack | null) {
+    return t === null ? null : { readyState: t.readyState, muted: t.muted, enabled: t.enabled };
+  }
 
   function gonder(metin: string) {
     baglanti?.send({ t: "msg.send", content: metin, localId: crypto.randomUUID() });
@@ -117,8 +159,6 @@
     {#if aktifSekme === "ses" && voice.joined && store.me}
       <VoiceStage
         selfId={store.me.id}
-        mixer={oturum?.mixer ?? null}
-        micMixer={oturum?.micMixer ?? null}
         onToggleMute={() => oturum?.setMuted(!voice.muted)}
         onToggleDeafen={() => oturum?.setDeafened(!voice.deafened)}
         onToggleCamera={() => void oturum?.setCamera(!voice.camera)}
@@ -131,7 +171,7 @@
     {/if}
   </main>
   <MemberList />
-  <RemoteAudio micMixer={oturum?.micMixer ?? null} />
+  <RemoteAudio />
 </div>
 
 <style>

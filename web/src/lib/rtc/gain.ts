@@ -44,11 +44,21 @@ export class RemoteAudioMixer {
     // Chrome'da uzak bir MediaStream, bir HTMLMediaElement'e atanmadan Web
     // Audio grafigine VERI AKITMAZ. Element sessize alinir; duyulan ses
     // GainNode'dan gelir.
+    //
+    // Element BELGEYE EKLENIR: yalnizca createElement ile birakildiginda
+    // veri pompalamasi garanti degil. Uzak mikrofonlar yedek <audio>
+    // yolundan cikarilinca konusma gostergesi oldu -- analyser sifir
+    // okuyordu, yani track hicbir elementte calmadigi icin akmiyordu.
     let sink: HTMLAudioElement | null = null;
     if (typeof document !== "undefined") {
       sink = document.createElement("audio");
       sink.srcObject = stream;
       sink.muted = true;
+      sink.style.display = "none";
+      // Isaret: teshiste ve testte mikserin sessiz pompasi ile RemoteAudio'nun
+      // yedek (DUYULAN) elementi karistirilmasin.
+      sink.dataset.kovan = "mikser";
+      document.body.appendChild(sink);
       void sink.play().catch(() => {});
     }
 
@@ -66,6 +76,15 @@ export class RemoteAudioMixer {
       z.sink.remove();
     }
     this.zincirler.delete(userId);
+  }
+
+  /**
+   * Bu kisinin acik kaynak dugumu. Konusma gostergesi kendi kaynagini
+   * acamaz (Chrome ayni track icin ikinci kaynaga sessizlik verir), bu
+   * yuzden buradakini odunc alir.
+   */
+  sourceOf(userId: string): MediaStreamAudioSourceNode | null {
+    return this.zincirler.get(userId)?.source ?? null;
   }
 
   volumeOf(userId: string): number {

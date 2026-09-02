@@ -2,7 +2,12 @@ import adapter from '@sveltejs/adapter-cloudflare';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
+// Canlida hangi surumun kostugunu bilmeden hata ayiklamak tahmin isi olur:
+// "yeni surumu deploy ettin mi" sorusu kovanDurum() ciktisindan cevaplanir.
+const surum = new Date().toISOString();
+
 export default defineConfig({
+	define: { __KOVAN_SURUM__: JSON.stringify(surum) },
 	plugins: [
 		sveltekit({
 			compilerOptions: {

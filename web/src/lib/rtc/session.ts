@@ -75,6 +75,9 @@ export class VoiceSession {
       this.mixer.setDeafened(voice.deafened);
       this.micMixer = mikrofonMikseri(this.audioCtx);
       this.micMixer.setDeafened(voice.deafened);
+      // Bilesenler mikserleri store'dan okur; alan atamasi tepkisel degil.
+      voice.ekranMikseri = this.mixer;
+      voice.mikMikseri = this.micMixer;
     }
 
     this.mesh = new Mesh({
@@ -109,6 +112,8 @@ export class VoiceSession {
     this.mixer = null;
     this.micMixer?.close();
     this.micMixer = null;
+    voice.ekranMikseri = null;
+    voice.mikMikseri = null;
     void this.audioCtx?.close();
     this.audioCtx = null;
     this.media.stopAll();
@@ -263,8 +268,12 @@ export class VoiceSession {
     // Gorunurluk karari bu yuzden stage.ts'te o bayraklardan veriliyor.
     yaz(track);
     if (slot === "mic") {
-      this.speaking?.watch(userId, track);
+      // SIRA ONEMLI: once mikser kaynagi acar, gosterge onu ODUNC ALIR.
+      // Ikinci bir kaynak acilirsa Chrome ona sessizlik verir.
       this.micMixer?.attach(userId, track);
+      const kaynak = this.micMixer?.sourceOf(userId) ?? null;
+      if (kaynak) this.speaking?.watchSource(userId, kaynak);
+      else this.speaking?.watch(userId, track);
     }
     if (slot === "screenAudio") this.mixer?.attach(userId, track);
 

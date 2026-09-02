@@ -16,6 +16,7 @@ export function bosTracks(): RemoteTracks {
   return { mic: null, cam: null, screenVideo: null, screenAudio: null };
 }
 
+import type { RemoteAudioMixer } from "./rtc/gain";
 import type { YerelTracks } from "./stage";
 export type { YerelTracks };
 
@@ -52,6 +53,16 @@ export const voice = $state({
    */
   connection: new SvelteMap<string, RTCPeerConnectionState>(),
   error: null as string | null,
+  /**
+   * Ses mikserleri BURADA durur, VoiceSession'in alaninda degil. Svelte 5
+   * sinif ornegini derin tepkisel yapmaz: `oturum.micMixer` join sirasinda
+   * dolunca hicbir abone uyanmiyordu ve bilesenler mikseri null gormeye
+   * devam ediyordu. Sonucu: RemoteAudio yedek <audio> yolunu acik tutuyor,
+   * ses hem elementten hem GainNode'dan geliyordu -- kulaga yanki gibi
+   * geliyor ve kaydirici hicbir sey yapmiyordu (gain 0'da bile ses vardi).
+   */
+  ekranMikseri: null as RemoteAudioMixer | null,
+  mikMikseri: null as RemoteAudioMixer | null,
 });
 
 /** Sunucuya gonderilecek bayrak paketi. voice.state govdesiyle birebir. */
@@ -79,4 +90,6 @@ export function resetVoice(): void {
   voice.local = bosYerel();
   voice.connection.clear();
   voice.error = null;
+  voice.ekranMikseri = null;
+  voice.mikMikseri = null;
 }
