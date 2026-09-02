@@ -1,10 +1,11 @@
 <script lang="ts">
   import { voice } from "$lib/voice.svelte";
 
-  let { onToggleMute, onToggleDeafen, onToggleCamera }: {
+  let { onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen }: {
     onToggleMute: () => void;
     onToggleDeafen: () => void;
     onToggleCamera: () => void;
+    onToggleScreen: () => void;
   } = $props();
 </script>
 
@@ -27,6 +28,12 @@
       aria-label={voice.camera ? "Kamerayı kapat" : "Kamerayı aç"}
       onclick={onToggleCamera}
     >📷</button>
+
+    <button
+      class:acik={voice.screen}
+      aria-label={voice.screen ? "Ekran paylaşımını durdur" : "Ekran paylaş"}
+      onclick={onToggleScreen}
+    >🖥</button>
   </div>
 {/if}
 

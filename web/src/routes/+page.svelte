@@ -11,9 +11,24 @@
   import Composer from "$lib/components/Composer.svelte";
   import MemberList from "$lib/components/MemberList.svelte";
   import RemoteAudio from "$lib/components/RemoteAudio.svelte";
+  import VideoGrid from "$lib/components/VideoGrid.svelte";
+  import ShareBanner from "$lib/components/ShareBanner.svelte";
+  import ShareDialog from "$lib/components/ShareDialog.svelte";
+  import type { ShareOptions } from "$lib/rtc/share";
 
   let baglanti: Connection | null = null;
   let oturum: VoiceSession | null = null;
+  let paylasimDiyalogu = $state(false);
+
+  function ekranDugmesi() {
+    if (voice.screen) oturum?.stopScreen();
+    else paylasimDiyalogu = true;
+  }
+
+  async function paylasimOnayi(o: ShareOptions) {
+    paylasimDiyalogu = false;
+    await oturum?.startScreen(o);
+  }
 
   onMount(() => {
     const token = localStorage.getItem("kovan_token");
@@ -53,6 +68,7 @@
     onToggleMute={() => oturum?.setMuted(!voice.muted)}
     onToggleDeafen={() => oturum?.setDeafened(!voice.deafened)}
     onToggleCamera={() => void oturum?.setCamera(!voice.camera)}
+    onToggleScreen={ekranDugmesi}
   />
   <main>
     <header class="ust">
@@ -61,11 +77,18 @@
         <span class="durum">{store.durum === "baglaniyor" ? "bağlanıyor…" : "bağlantı koptu"}</span>
       {/if}
     </header>
+    <ShareBanner onStop={() => oturum?.stopScreen()} />
+    <VideoGrid />
     <MessageList onToggleReaction={tepki} />
     <Composer onSend={gonder} onTyping={() => baglanti?.typing()} />
   </main>
   <MemberList />
   <RemoteAudio />
+  <ShareDialog
+    open={paylasimDiyalogu}
+    onConfirm={paylasimOnayi}
+    onCancel={() => (paylasimDiyalogu = false)}
+  />
 </div>
 
 <style>

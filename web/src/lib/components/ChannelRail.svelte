@@ -2,12 +2,13 @@
   import VoiceChannel from "./VoiceChannel.svelte";
   import VoiceControls from "./VoiceControls.svelte";
 
-  let { onJoin, onLeave, onToggleMute, onToggleDeafen, onToggleCamera }: {
+  let { onJoin, onLeave, onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen }: {
     onJoin: () => void;
     onLeave: () => void;
     onToggleMute: () => void;
     onToggleDeafen: () => void;
     onToggleCamera: () => void;
+    onToggleScreen: () => void;
   } = $props();
 </script>
 
@@ -17,7 +18,7 @@
     <li><button class="kanal aktif"><span aria-hidden="true">#</span> genel</button></li>
   </ul>
   <VoiceChannel {onJoin} {onLeave} />
-  <VoiceControls {onToggleMute} {onToggleDeafen} {onToggleCamera} />
+  <VoiceControls {onToggleMute} {onToggleDeafen} {onToggleCamera} {onToggleScreen} />
 </nav>
 
 <style>
