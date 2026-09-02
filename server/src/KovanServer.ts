@@ -6,6 +6,7 @@ import {
   MAX_CONTENT, MAX_EMOJI, insertMessage, messageExists, messagesAfter,
   reactionsFor, recentMessages, toggleReaction,
 } from "./messages";
+import { VOICE_CAP, voiceFull, voiceMembers } from "./voice";
 import type { ClientEvent, ServerEvent, User } from "@shared/protocol";
 
 interface UserRow extends Record<string, SqlStorageValue> {
@@ -94,6 +95,7 @@ export class KovanServer implements DurableObject {
       recentMessages: gecmis,
       reactions: reactionsFor(this.sql, gecmis.map((m) => m.id)),
       online: onlineUserIds(this.ctx),
+      voiceMembers: voiceMembers(this.allSocketStates()),
     } satisfies ServerEvent));
 
     broadcast(this.ctx, { t: "presence.update", userId: user.id, online: true }, server);
@@ -107,6 +109,15 @@ export class KovanServer implements DurableObject {
         "SELECT id, username, display_name FROM users ORDER BY created_at")
       .toArray()
       .map((r) => ({ id: r.id, username: r.username, displayName: r.display_name }));
+  }
+
+  /** Ses listesi DAIMA acik socket attachment'larindan turetilir (R3). */
+  private allSocketStates(): SocketState[] {
+    return this.ctx.getWebSockets().map(readState);
+  }
+
+  private broadcastVoice(): void {
+    broadcast(this.ctx, { t: "voice.members", members: voiceMembers(this.allSocketStates()) });
   }
 
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
@@ -150,6 +161,10 @@ export class KovanServer implements DurableObject {
         });
         return;
       }
+      case "voice.join":
+        return this.handleVoiceJoin(ws, state);
+      case "voice.leave":
+        return this.handleVoiceLeave(ws, state);
       case "sync": {
         // Sayi olmayan / ondalikli / negatif deger bastan senkron sayilir.
         // Ham deger SQL'e verilirse SQLite tur onceligi yuzunden sessizce
@@ -184,6 +199,30 @@ export class KovanServer implements DurableObject {
     // Gönderene localId ile döner (optimistic UI eşlemesi), diğerlerine sade.
     ws.send(JSON.stringify({ t: "msg.new", message, localId } satisfies ServerEvent));
     broadcast(this.ctx, { t: "msg.new", message }, ws);
+  }
+
+  private handleVoiceJoin(ws: WebSocket, state: SocketState): void {
+    // Cift tiklama ya da yeniden gonderim: sessiz gec, yayini tekrarlama.
+    if (state.inVoice) return;
+    if (voiceFull(this.allSocketStates(), state.userId)) {
+      return this.fail(ws, "ses_dolu", `Ses kanalı dolu (en fazla ${VOICE_CAP} kişi).`);
+    }
+    writeState(ws, {
+      inVoice: true, muted: false, deafened: false,
+      camera: false, screen: false, screenAudio: false,
+    });
+    this.broadcastVoice();
+  }
+
+  private handleVoiceLeave(ws: WebSocket, state: SocketState): void {
+    if (!state.inVoice) return;
+    // Bayraklar da sifirlanir: kamerasi acikken cikip geri girenin karesi
+    // aksi halde uye listesinde acik gorunur.
+    writeState(ws, {
+      inVoice: false, muted: false, deafened: false,
+      camera: false, screen: false, screenAudio: false,
+    });
+    this.broadcastVoice();
   }
 
   private fail(ws: WebSocket, code: string, message: string): void {
