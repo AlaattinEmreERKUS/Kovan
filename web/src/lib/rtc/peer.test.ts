@@ -5,6 +5,7 @@ import { isPolite } from "./politeness";
 /** Perfect negotiation'i test etmek icin yeterli en kucuk sahte. */
 class SahteTransceiver {
   sender = { replaceTrack: vi.fn(async () => {}) };
+  direction: RTCRtpTransceiverDirection = "sendrecv";
   constructor(public kind: "audio" | "video") {}
 }
 
@@ -39,6 +40,12 @@ class SahtePC {
   async setRemoteDescription(desc: RTCSessionDescriptionInit) {
     this.remoteDescription = desc;
     this.signalingState = desc.type === "offer" ? "have-remote-offer" : "stable";
+    // Gercek tarayici gibi: gelen offer'in m-line'lari icin transceiver acar.
+    if (desc.type === "offer" && this.transceivers.length === 0) {
+      for (const kind of ["audio", "video", "video", "audio"] as const) {
+        this.addTransceiver(kind);
+      }
+    }
   }
   async addIceCandidate(c: unknown) { this.eklenenAdaylar.push(c); }
   close() { this.kapandi = true; }
@@ -68,37 +75,62 @@ describe("isPolite", () => {
 });
 
 describe("Peer transceiver duzeni", () => {
-  it("dort transceiver sabit sirada eklenir", () => {
-    const { pc } = kur(true);
+  it("impolite taraf dort transceiver'i sabit sirada acar", () => {
+    const { pc } = kur(false);
     expect(pc.transceivers.map((t) => t.kind)).toEqual(["audio", "video", "video", "audio"]);
     expect(SLOT_ORDER).toEqual(["mic", "cam", "screenVideo", "screenAudio"]);
   });
 
   it("uzak track transceiver indeksinden yuvaya eslenir", () => {
-    const { pc, track } = kur(true);
+    const { pc, track } = kur(false);
     const sahteTrack = { kind: "video" } as MediaStreamTrack;
     pc.ontrack!({ transceiver: pc.transceivers[2], track: sahteTrack });
     expect(track).toEqual([["screenVideo", sahteTrack]]);
   });
 
   it("setTrack dogru sender'a replaceTrack cagirir", () => {
-    const { pc, peer } = kur(true);
+    const { pc, peer } = kur(false);
     const t = { kind: "audio" } as MediaStreamTrack;
     peer.setTrack("mic", t);
     expect(pc.transceivers[0].sender.replaceTrack).toHaveBeenCalledWith(t);
     expect(pc.transceivers[1].sender.replaceTrack).not.toHaveBeenCalled();
   });
+
+  it("polite taraf transceiver ACMAZ", () => {
+    const { pc } = kur(true);
+    expect(pc.transceivers).toHaveLength(0);
+  });
+
+  it("polite taraf offer gelince uzaktan doganlari benimser ve sendrecv yapar", async () => {
+    const { pc, peer } = kur(true);
+    const t = { kind: "audio" } as MediaStreamTrack;
+    peer.setTrack("mic", t);            // sender henuz yok, kuyruga girer
+    await peer.handleSignal({ description: { type: "offer", sdp: "uzak" } });
+
+    expect(pc.transceivers).toHaveLength(4);
+    expect(pc.transceivers.map((x) => x.direction)).toEqual(
+      ["sendrecv", "sendrecv", "sendrecv", "sendrecv"]);
+    // Kuyruktaki track benimseme sonrasi uygulanir; aksi halde katilan kisi
+    // hic ses gondermez.
+    expect(pc.transceivers[0].sender.replaceTrack).toHaveBeenCalledWith(t);
+  });
 });
 
 describe("Peer perfect negotiation", () => {
-  it("negotiationneeded offer uretir ve yollar", async () => {
-    const { pc, gonderilen } = kur(true);
+  it("impolite tarafta negotiationneeded offer uretir ve yollar", async () => {
+    const { pc, gonderilen } = kur(false);
     await pc.onnegotiationneeded!();
     expect(gonderilen[0].description!.type).toBe("offer");
   });
 
-  it("ice adayi yollanir", () => {
+  it("polite taraf baslangic offer'i URETMEZ", async () => {
     const { pc, gonderilen } = kur(true);
+    await pc.onnegotiationneeded!();
+    expect(gonderilen).toHaveLength(0);
+  });
+
+  it("ice adayi yollanir", () => {
+    const { pc, gonderilen } = kur(false);
     pc.onicecandidate!({ candidate: { candidate: "aday" } });
     expect(gonderilen[0].candidate).toEqual({ candidate: "aday" });
   });

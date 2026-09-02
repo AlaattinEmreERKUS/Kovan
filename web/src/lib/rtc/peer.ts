@@ -35,15 +35,34 @@ export class Peer {
   private ignoreOffer = false;
   private settingRemoteAnswerPending = false;
   private senders = new Map<TrackSlot, RTCRtpSender>();
+  /** Sender'lar hazir olmadan gelen track'ler; adopt() sonrasi uygulanir. */
+  private pending = new Map<TrackSlot, MediaStreamTrack | null>();
 
   constructor(private o: PeerOptions) {
     const pc = o.pc;
-    for (const slot of SLOT_ORDER) {
-      const tr = pc.addTransceiver(SLOT_KIND[slot], { direction: "sendrecv" });
-      this.senders.set(slot, tr.sender);
+    // Transceiver'lari YALNIZCA impolite taraf acar. Iki taraf da acarsa
+    // Chrome, cevap veren tarafin onceden actiklarini uzak m-line'lara
+    // ESLEMIYOR: kendi dordu mid=null kalirken offer icin dort YENI
+    // transceiver aciliyor. Sonuc 8 transceiver, uzak track'ler 4-7
+    // indekslerinde ve SLOT_ORDER eslemesi cokuyor (Task 13'te olculdu).
+    // Polite taraf offer gelince adopt() ile uzaktan doganlari benimser.
+    if (!o.polite) {
+      for (const slot of SLOT_ORDER) {
+        const tr = pc.addTransceiver(SLOT_KIND[slot], { direction: "sendrecv" });
+        this.senders.set(slot, tr.sender);
+      }
     }
 
     pc.onnegotiationneeded = async () => {
+      // Baslangic offer'ini YALNIZCA impolite taraf uretir. Iki taraf da
+      // offer uretirse polite tarafin onceden actigi dort transceiver
+      // eslesmeye giremiyor ve uzak m-line'lar icin YENI transceiver'lar
+      // aciliyor: 8 transceiver, uzak track'ler 4-7 indekslerinde, SLOT_ORDER
+      // eslemesi coker ve ontrack sessizce doner. Olculdu (Task 13 teshisi).
+      //
+      // Renegotiation gerekmiyor: dort transceiver sabit, track degisimi
+      // replaceTrack ile yapiliyor ve o negotiation tetiklemiyor.
+      if (this.o.polite) return;
       try {
         this.makingOffer = true;
         await pc.setLocalDescription();
@@ -85,6 +104,9 @@ export class Peer {
       this.settingRemoteAnswerPending = false;
 
       if (desc.type === "offer") {
+        // Benimseme setRemoteDescription ile setLocalDescription ARASINDA
+        // olmali: yonu burada sendrecv yapinca cevap da sendrecv cikar.
+        if (this.o.polite && this.senders.size === 0) this.adopt();
         await pc.setLocalDescription();
         this.o.sendSignal({ description: pc.localDescription! });
       }
@@ -104,7 +126,28 @@ export class Peer {
 
   /** Yeni transceiver ACILMAZ; mevcut sender'in track'i degistirilir. */
   setTrack(slot: TrackSlot, track: MediaStreamTrack | null): void {
-    void this.senders.get(slot)?.replaceTrack(track);
+    this.pending.set(slot, track);
+    const sender = this.senders.get(slot);
+    // Polite tarafta sender'lar offer gelene kadar yok; track adopt() sonrasi
+    // uygulanir. Kaydetmezsek katilan kisi hic ses gondermez.
+    if (sender) void sender.replaceTrack(track);
+  }
+
+  /**
+   * Polite taraf: uzak offer'in acdigi transceiver'lari yuvalara baglar ve
+   * yonlerini sendrecv yapar. Sira uzak m-line sirasidir, yani SLOT_ORDER.
+   */
+  private adopt(): void {
+    const trs = this.o.pc.getTransceivers();
+    SLOT_ORDER.forEach((slot, i) => {
+      const tr = trs[i];
+      if (!tr) return;
+      tr.direction = "sendrecv";
+      this.senders.set(slot, tr.sender);
+    });
+    for (const [slot, track] of this.pending) {
+      void this.senders.get(slot)?.replaceTrack(track);
+    }
   }
 
   close(): void {
