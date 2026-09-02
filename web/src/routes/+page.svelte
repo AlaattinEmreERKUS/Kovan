@@ -11,15 +11,33 @@
   import Composer from "$lib/components/Composer.svelte";
   import MemberList from "$lib/components/MemberList.svelte";
   import RemoteAudio from "$lib/components/RemoteAudio.svelte";
-  import VideoGrid from "$lib/components/VideoGrid.svelte";
+  import VoiceStage from "$lib/components/VoiceStage.svelte";
   import ShareBanner from "$lib/components/ShareBanner.svelte";
   import ShareDialog from "$lib/components/ShareDialog.svelte";
+  import Icon from "$lib/components/Icon.svelte";
   import type { ShareOptions } from "$lib/rtc/share";
 
   let baglanti: Connection | null = null;
-  // $state sart: oturum atandiginda VideoGrid'in mixer prop'u guncellenmeli.
+  // $state sart: oturum atandiginda VoiceStage'in mixer prop'u guncellenmeli.
   let oturum = $state<VoiceSession | null>(null);
   let paylasimDiyalogu = $state(false);
+  let aktifSekme = $state<"metin" | "ses">("metin");
+
+  async function katil() {
+    await oturum?.join();
+    // join basarisiz olduysa (mikrofon izni yok) sahneye gecme.
+    if (voice.joined) aktifSekme = "ses";
+  }
+
+  function ayril() {
+    oturum?.leave();
+    aktifSekme = "metin";
+  }
+
+  // Baglanti koparsa resetVoice joined'i dusurur; sahne kilitli kalmamali.
+  $effect(() => {
+    if (!voice.joined && aktifSekme === "ses") aktifSekme = "metin";
+  });
 
   function ekranDugmesi() {
     if (voice.screen) oturum?.stopScreen();
@@ -64,8 +82,11 @@
 
 <div class="kabuk">
   <ChannelRail
-    onJoin={() => void oturum?.join()}
-    onLeave={() => oturum?.leave()}
+    {aktifSekme}
+    onMetinSekmesi={() => (aktifSekme = "metin")}
+    onJoin={() => void katil()}
+    onSahneyeDon={() => (aktifSekme = "ses")}
+    onLeave={ayril}
     onToggleMute={() => oturum?.setMuted(!voice.muted)}
     onToggleDeafen={() => oturum?.setDeafened(!voice.deafened)}
     onToggleCamera={() => void oturum?.setCamera(!voice.camera)}
@@ -73,15 +94,37 @@
   />
   <main>
     <header class="ust">
-      <span aria-hidden="true">#</span> genel
+      {#if aktifSekme === "ses"}
+        <Icon ad="kanal-ses" boyut={15} /> sohbet
+      {:else}
+        <Icon ad="kanal-metin" boyut={15} /> genel
+      {/if}
       {#if store.durum !== "acik"}
         <span class="durum">{store.durum === "baglaniyor" ? "bağlanıyor…" : "bağlantı koptu"}</span>
       {/if}
     </header>
+
+    <!--
+      Serit HER IKI sekmede de gorunur: ekranini paylasirken sohbete
+      donmen paylasimin durdurma dugmesini kaybetmeni gerektirmez.
+      e2e/screen.spec.ts bunu sahnedeyken getByRole("status") ile ariyor.
+    -->
     <ShareBanner onStop={() => oturum?.stopScreen()} />
-    <VideoGrid mixer={oturum?.mixer ?? null} />
-    <MessageList onToggleReaction={tepki} />
-    <Composer onSend={gonder} onTyping={() => baglanti?.typing()} />
+
+    {#if aktifSekme === "ses" && voice.joined && store.me}
+      <VoiceStage
+        selfId={store.me.id}
+        mixer={oturum?.mixer ?? null}
+        onToggleMute={() => oturum?.setMuted(!voice.muted)}
+        onToggleDeafen={() => oturum?.setDeafened(!voice.deafened)}
+        onToggleCamera={() => void oturum?.setCamera(!voice.camera)}
+        onToggleScreen={ekranDugmesi}
+        onLeave={ayril}
+      />
+    {:else}
+      <MessageList onToggleReaction={tepki} />
+      <Composer onSend={gonder} onTyping={() => baglanti?.typing()} />
+    {/if}
   </main>
   <MemberList />
   <RemoteAudio />
