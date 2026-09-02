@@ -1,0 +1,11 @@
+# HTML her acilista DOGRULANIR. Bu dosya olmadan Pages sayfaya hicbir
+# Cache-Control koymuyordu; tarayici eski index.html'i tutup eski
+# _app/immutable/... chunk'larini cagiriyor ve deploy edilen surum
+# gorunmuyordu. Deploya ozel adres (abc123.kovan-web.pages.dev) ayri
+# origin oldugu icin yeni goruluyor, asil adres eski kaliyordu.
+#
+# Hash'li varliklarin immutable basligini SvelteKit adaptoru bu dosyanin
+# ALTINA ekliyor; sonraki blok ayni basligi eziyor, o yuzden burada genel
+# kurali vermek guvenli.
+/*
+  Cache-Control: no-cache
