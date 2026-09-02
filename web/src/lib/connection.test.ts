@@ -83,7 +83,7 @@ describe("Connection", () => {
     ilk.onmessage!({ data: JSON.stringify({
       t: "hello", me: { id: "u1", username: "n", displayName: "N" },
       members: [], recentMessages: [{ id: 7, authorId: "u1", content: "x", createdAt: 1 }],
-      reactions: [], online: ["u1"],
+      reactions: [], online: ["u1"], voiceMembers: [],
     }) });
 
     ilk.close();

@@ -1,5 +1,6 @@
-import type { ClientEvent, ServerEvent } from "@shared/protocol";
+import type { ClientEvent, ServerEvent, VoiceMember } from "@shared/protocol";
 import { applyReactions, lastMessageId, reactionKey, store } from "./store.svelte";
+import { resetVoice, voice } from "./voice.svelte";
 
 const TYPING_ARALIK = 3000;
 const BACKOFF_BASLANGIC = 1000;
@@ -12,6 +13,10 @@ export class Connection {
   private sonTyping = 0;
   private kapandi = false;
   private typingZamanlayicilar = new Map<string, ReturnType<typeof setTimeout>>();
+
+  /** Mesh bu geri cagrilara baglanir (Task 11). */
+  onVoiceMembers: ((members: VoiceMember[]) => void) | null = null;
+  onSignal: ((from: string, data: unknown) => void) | null = null;
 
   constructor(private url: string, private token: string) {
     this.ac();
@@ -33,6 +38,9 @@ export class Connection {
     ws.onmessage = (e: MessageEvent) => this.handle(JSON.parse(e.data as string) as ServerEvent);
 
     ws.onclose = () => {
+      // Socket kopunca mesh de olur: sinyal kanali yok. Store temizlenmezse
+      // arayuz hala seste gorunur ve kullanici konustugunu saniyor.
+      resetVoice();
       store.durum = "kopuk";
       if (this.kapandi) return;
       setTimeout(() => this.ac(), this.backoff);
@@ -50,6 +58,7 @@ export class Connection {
         // aboneleri bosa dusurur.
         store.online.clear();
         for (const id of event.online) store.online.add(id);
+        voice.members = event.voiceMembers;
         applyReactions(event.reactions);
         return;
 
@@ -85,8 +94,22 @@ export class Connection {
         return;
       }
 
+      case "voice.members":
+        voice.members = event.members;
+        this.onVoiceMembers?.(event.members);
+        return;
+
+      case "signal":
+        this.onSignal?.(event.from, event.data);
+        return;
+
       case "error":
         console.error(`[kovan] ${event.code}: ${event.message}`);
+        // Ses hatalari kullaniciya gosterilir: sessizce konsola dusen bir
+        // "ses_dolu" kullaniciyi bozuk mikrofon aramaya gonderir.
+        if (event.code.startsWith("ses_") || event.code === "seste_degil") {
+          voice.error = event.message;
+        }
         return;
     }
   }
