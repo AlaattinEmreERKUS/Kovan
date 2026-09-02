@@ -154,3 +154,46 @@ describe("VoiceSession ayrilma", () => {
     expect(pcler).toHaveLength(0);
   });
 });
+
+describe("VoiceSession ekran paylasimi", () => {
+  it("paylasim baslayinca bayraklar yayilir", async () => {
+    const { session, gonderilen } = kur();
+    await session.join();
+    const s = session as unknown as { media: { startScreen: unknown } };
+    s.media.startScreen = vi.fn(async () => ({ video: sahteTrack("video"), audio: sahteTrack("audio") }));
+    await session.startScreen({ surface: "monitor", systemAudio: true });
+    expect(voice.screen).toBe(true);
+    expect(voice.screenAudio).toBe(true);
+    expect(gonderilen.at(-1)).toMatchObject({ screen: true, screenAudio: true });
+  });
+
+  it("Chromium cubugundan durdurulunca ended yakalanir ve durum yayilir", async () => {
+    const { session, gonderilen } = kur();
+    await session.join();
+    const video = sahteTrack("video");
+    const dinleyiciler: Array<() => void> = [];
+    (video as unknown as { addEventListener: unknown }).addEventListener =
+      (tip: string, fn: () => void) => { if (tip === "ended") dinleyiciler.push(fn); };
+    const s = session as unknown as { media: { startScreen: unknown } };
+    s.media.startScreen = vi.fn(async () => ({ video, audio: null }));
+
+    await session.startScreen({ surface: "monitor", systemAudio: false });
+    expect(voice.screen).toBe(true);
+
+    dinleyiciler.forEach((fn) => fn());   // kullanici Chromium cubuguna basti
+    expect(voice.screen).toBe(false);
+    expect(gonderilen.at(-1)).toMatchObject({ screen: false, screenAudio: false });
+  });
+
+  it("kullanici native secicide vazgecerse hata gosterilmez", async () => {
+    const { session } = kur();
+    await session.join();
+    const s = session as unknown as { media: { startScreen: unknown } };
+    s.media.startScreen = vi.fn(async () => {
+      throw new DOMException("iptal", "NotAllowedError");
+    });
+    await session.startScreen({ surface: "monitor", systemAudio: true });
+    expect(voice.screen).toBe(false);
+    expect(voice.error).toBeNull();
+  });
+});

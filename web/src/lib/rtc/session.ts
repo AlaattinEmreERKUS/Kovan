@@ -5,6 +5,7 @@ import { LocalMedia } from "./media";
 import { Mesh } from "./mesh";
 import { Peer, type SignalPayload, type TrackSlot } from "./peer";
 import { SpeakingDetector } from "./speaking";
+import type { ShareOptions } from "./share";
 
 export interface SessionOptions {
   conn: Connection;
@@ -135,6 +136,45 @@ export class VoiceSession {
       this.media.stopCamera();
     }
     voice.camera = on;
+    this.publish();
+  }
+
+  async startScreen(o: ShareOptions): Promise<void> {
+    if (voice.screen) return;
+    let video: MediaStreamTrack;
+    let audio: MediaStreamTrack | null;
+    try {
+      ({ video, audio } = await this.media.startScreen(o));
+    } catch (e) {
+      // NotAllowedError = kullanici native secicide vazgecti. Hata
+      // GOSTERILMEZ; vazgecmek bir ariza degil (spec 8.1 adim 3).
+      if ((e as DOMException)?.name !== "NotAllowedError") {
+        voice.error = "Ekran paylaşımı başlatılamadı.";
+      }
+      return;
+    }
+
+    // Ayri transceiver'lar: izleyicinin ekran sesini mikrofondan bagimsiz
+    // kisabilmesi buna bagli (spec 8.1 adim 4).
+    this.mesh?.setTrack("screenVideo", video);
+    this.mesh?.setTrack("screenAudio", audio);
+
+    // Kullanici bizim seridimizi degil Chromium'un cubugunu kullanabilir.
+    // Bu dinleyici olmadan digerleri olu bir kare gorur (spec 8.1 adim 6).
+    video.addEventListener("ended", () => this.stopScreen());
+
+    voice.screen = true;
+    voice.screenAudio = audio !== null;
+    this.publish();
+  }
+
+  stopScreen(): void {
+    if (!voice.screen) return;
+    this.mesh?.setTrack("screenVideo", null);
+    this.mesh?.setTrack("screenAudio", null);
+    this.media.stopScreen();
+    voice.screen = false;
+    voice.screenAudio = false;
     this.publish();
   }
 

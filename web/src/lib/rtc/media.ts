@@ -1,3 +1,5 @@
+import { buildConstraints, type ShareOptions } from "./share";
+
 export interface MediaDeps {
   getUserMedia(c: MediaStreamConstraints): Promise<MediaStream>;
   getDisplayMedia(o: DisplayMediaStreamOptions): Promise<MediaStream>;
@@ -59,6 +61,26 @@ export class LocalMedia {
   stopCamera(): void {
     this.cam?.stop();
     this.cam = null;
+  }
+
+  /**
+   * Native secici acilir (secici DEGISTIRILEMEZ, spec 8.1 kisit 1);
+   * constraint'ler on-diyalogdan gelir ve seciciyi on-filtreler.
+   */
+  async startScreen(o: ShareOptions): Promise<{ video: MediaStreamTrack; audio: MediaStreamTrack | null }> {
+    const stream = await this.deps.getDisplayMedia(buildConstraints(o));
+    this.screenVideo = stream.getVideoTracks()[0];
+    // Sistem sesi istendi diye track GELECEK diye bir sey yok: kullanici
+    // native secicide ses kutusunu kapatmis olabilir.
+    this.screenAudio = stream.getAudioTracks()[0] ?? null;
+    return { video: this.screenVideo, audio: this.screenAudio };
+  }
+
+  stopScreen(): void {
+    this.screenVideo?.stop();
+    this.screenAudio?.stop();
+    this.screenVideo = null;
+    this.screenAudio = null;
   }
 
   stopAll(): void {
