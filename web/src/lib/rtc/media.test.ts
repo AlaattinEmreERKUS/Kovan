@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { LocalMedia, MIC_CONSTRAINTS, type MediaDeps } from "./media";
+import { LocalMedia, micConstraints, type MediaDeps } from "./media";
 
 function sahteTrack(kind: "audio" | "video") {
   return { kind, enabled: true, readyState: "live", stop: vi.fn(), onended: null } as unknown as MediaStreamTrack;
@@ -24,12 +24,41 @@ function kur() {
 }
 
 describe("LocalMedia mikrofon", () => {
-  it("startMic ses kisitlariyla track alir", async () => {
+  it("startMic kayitli ses ayarlarindaki kisitlarla track alir", async () => {
     const { media, deps, mikrofon } = kur();
     const t = await media.startMic();
     expect(t).toBe(mikrofon);
     expect(media.mic).toBe(mikrofon);
-    expect(deps.getUserMedia).toHaveBeenCalledWith(MIC_CONSTRAINTS);
+    expect(deps.getUserMedia).toHaveBeenCalledWith(micConstraints());
+    const kisit = (deps.getUserMedia as ReturnType<typeof vi.fn>).mock.calls[0][0].audio;
+    expect(kisit).toMatchObject({
+      echoCancellation: expect.any(Boolean),
+      noiseSuppression: expect.any(Boolean),
+      autoGainControl: expect.any(Boolean),
+    });
+  });
+
+  it("setFiltreler track'i degistirmeden kisitlari uygular", async () => {
+    const { media } = kur();
+    await media.startMic();
+    const uygula = vi.fn(async () => {});
+    (media.mic as unknown as { applyConstraints: unknown }).applyConstraints = uygula;
+    await media.setFiltreler({
+      esik: 0.02, yankiEngelleme: false, gurultuBastirma: true, otomatikSeviye: false,
+    });
+    expect(uygula).toHaveBeenCalledWith({
+      echoCancellation: false, noiseSuppression: true, autoGainControl: false,
+    });
+  });
+
+  it("applyConstraints desteklenmezse patlamaz", async () => {
+    const { media } = kur();
+    await media.startMic();
+    (media.mic as unknown as { applyConstraints: unknown }).applyConstraints =
+      vi.fn(async () => { throw new Error("desteklenmiyor"); });
+    await expect(media.setFiltreler({
+      esik: 0, yankiEngelleme: true, gurultuBastirma: true, otomatikSeviye: true,
+    })).resolves.toBeUndefined();
   });
 
   it("ikinci startMic yeni izin istemez", async () => {

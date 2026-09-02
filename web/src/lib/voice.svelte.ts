@@ -17,6 +17,7 @@ export function bosTracks(): RemoteTracks {
 }
 
 import type { RemoteAudioMixer } from "./rtc/gain";
+import { sesAyarlariOku, type SesAyarlari } from "./ses-ayarlari";
 import type { YerelTracks } from "./stage";
 export type { YerelTracks };
 
@@ -63,6 +64,9 @@ export const voice = $state({
    */
   ekranMikseri: null as RemoteAudioMixer | null,
   mikMikseri: null as RemoteAudioMixer | null,
+  /** Giden mikrofonun anlik seviyesi (RMS); ayar ekranindaki cubuk. */
+  girisSeviyesi: 0,
+  sesAyarlari: sesAyarlariOku() as SesAyarlari,
 });
 
 /** Sunucuya gonderilecek bayrak paketi. voice.state govdesiyle birebir. */
@@ -92,4 +96,5 @@ export function resetVoice(): void {
   voice.error = null;
   voice.ekranMikseri = null;
   voice.mikMikseri = null;
+  voice.girisSeviyesi = 0;
 }

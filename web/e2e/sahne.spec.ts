@@ -170,3 +170,48 @@ test("kameralar alani doldurur, kare sayisina gore yayilir", async ({ browser })
   await ctxA.close();
   await ctxB.close();
 });
+
+test("ses ayarlari paneli: esik kalici, kapi giden sesi isliyor", async ({ browser }) => {
+  const damga = Date.now();
+  await davetUret(`K7-${damga}`);
+
+  const ctx = await browser.newContext();
+  const a = await ctx.newPage();
+  await kayitOl(a, `K7-${damga}`, `Ayar${damga}`);
+  await a.getByLabel("Ses kanalına katıl").click();
+
+  // Kapi giden sesi olcuyor: sahte mikrofon ton uretir, seviye sifir kalmaz.
+  await expect.poll(async () => a.evaluate(() => (window as unknown as {
+    __kovan: { voice: { girisSeviyesi: number } };
+  }).__kovan.voice.girisSeviyesi), { timeout: 10_000 }).toBeGreaterThan(0);
+
+  // Mesh'e giden track HAM mikrofon degil, kapidan cikan track olmali.
+  expect(await a.evaluate(() => {
+    const o = (window as unknown as { __kovan: { oturum: {
+      media: { mic: MediaStreamTrack | null };
+      mikIsleyici: { cikis: MediaStreamTrack } | null;
+    } } }).__kovan.oturum;
+    return Boolean(o.mikIsleyici) && o.mikIsleyici!.cikis !== o.media.mic;
+  })).toBe(true);
+
+  await a.getByLabel("Ses ayarları").click();
+  const kaydirici = a.getByLabel("Giriş hassasiyeti eşiği");
+  await expect(kaydirici).toBeVisible();
+  await kaydirici.fill("0.05");
+
+  // Ayar hem store'a hem localStorage'a yazilir.
+  expect(await a.evaluate(() => (window as unknown as {
+    __kovan: { voice: { sesAyarlari: { esik: number } } };
+  }).__kovan.voice.sesAyarlari.esik)).toBeCloseTo(0.05, 3);
+
+  await a.getByLabel("Gürültü bastırma").uncheck();
+
+  await a.reload();
+  await expect(a.locator("article").first()).toBeVisible({ timeout: 10_000 });
+  await a.getByLabel("Ses kanalına katıl").click();
+  await a.getByLabel("Ses ayarları").click();
+  await expect(a.getByLabel("Giriş hassasiyeti eşiği")).toHaveValue("0.05");
+  await expect(a.getByLabel("Gürültü bastırma")).not.toBeChecked();
+
+  await ctx.close();
+});

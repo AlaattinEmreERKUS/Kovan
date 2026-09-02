@@ -6,6 +6,8 @@ import { Mesh } from "./mesh";
 import { Peer, type SignalPayload, type TrackSlot } from "./peer";
 import { SpeakingDetector } from "./speaking";
 import { ekranMikseri, mikrofonMikseri, type RemoteAudioMixer } from "./gain";
+import { MikrofonIsleyici } from "./mikrofon";
+import { sesAyarlariOku, sesAyarlariYaz, type SesAyarlari } from "../ses-ayarlari";
 
 export interface SessionOptions {
   conn: Connection;
@@ -36,6 +38,8 @@ export class VoiceSession {
   mixer: RemoteAudioMixer | null = null;
   /** Kisi bazli mikrofon seviyesi; RemoteAudio yalnizca bu yokken calar. */
   micMixer: RemoteAudioMixer | null = null;
+  /** Giden mikrofonun kapisi. Yoksa ham track gonderilir. */
+  private mikIsleyici: MikrofonIsleyici | null = null;
 
   constructor(private o: SessionOptions) {
     this.media = o.media ?? new LocalMedia();
@@ -70,7 +74,20 @@ export class VoiceSession {
           else voice.speaking.delete(userId);
         },
       });
-      if (this.media.mic) this.speaking.watch(this.o.selfId, this.media.mic);
+      // Kendi konusma gostergen KAPIDAN gelir: kapi kapaliyken karsi taraf
+      // seni duymuyor, gostergenin yaniyor olmasi yanlis bilgi olurdu.
+      if (this.media.mic) {
+        this.mikIsleyici = new MikrofonIsleyici({
+          ctx: this.audioCtx,
+          track: this.media.mic,
+          esik: voice.sesAyarlari.esik,
+          onSeviye: (seviye, acik) => {
+            voice.girisSeviyesi = seviye;
+            if (acik && !voice.muted) voice.speaking.add(this.o.selfId);
+            else voice.speaking.delete(this.o.selfId);
+          },
+        });
+      }
       this.mixer = ekranMikseri(this.audioCtx);
       this.mixer.setDeafened(voice.deafened);
       this.micMixer = mikrofonMikseri(this.audioCtx);
@@ -108,6 +125,9 @@ export class VoiceSession {
     this.mesh = null;
     this.speaking?.stop();
     this.speaking = null;
+    this.mikIsleyici?.close();
+    this.mikIsleyici = null;
+    voice.girisSeviyesi = 0;
     this.mixer?.close();
     this.mixer = null;
     this.micMixer?.close();
@@ -127,6 +147,24 @@ export class VoiceSession {
     voice.local = bosYerel();
     voice.speaking.clear();
     voice.connection.clear();
+  }
+
+  /** Teshis: cihazin GERCEKTEN uyguladigi ses ayarlari. */
+  mikAyari(): MediaTrackSettings | null {
+    return this.media.mic?.getSettings() ?? null;
+  }
+
+  /** Kapidan gecmis track varsa o gider; yoksa ham mikrofon. */
+  private gidenMik(): MediaStreamTrack | null {
+    return this.mikIsleyici?.cikis ?? this.media.mic;
+  }
+
+  /** Kapi esigi ve tarayici filtreleri; ikisi de yerel ve kaliciDIR. */
+  async setSesAyarlari(a: SesAyarlari): Promise<void> {
+    voice.sesAyarlari = a;
+    sesAyarlariYaz(a);
+    this.mikIsleyici?.setEsik(a.esik);
+    await this.media.setFiltreler(a);
   }
 
   setMuted(muted: boolean): void {
@@ -239,7 +277,7 @@ export class VoiceSession {
 
     // Baglanti kurulur kurulmaz yerel track'ler yerine oturur. replaceTrack
     // yeni transceiver acmaz, bu yuzden ekstra negotiation turu olmaz.
-    peer.setTrack("mic", this.media.mic);
+    peer.setTrack("mic", this.gidenMik());
     peer.setTrack("cam", this.media.cam);
     peer.setTrack("screenVideo", this.media.screenVideo);
     peer.setTrack("screenAudio", this.media.screenAudio);

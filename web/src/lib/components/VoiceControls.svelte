@@ -2,14 +2,19 @@
   import { voice } from "$lib/voice.svelte";
   import type { GorunumModu } from "$lib/gorunum";
   import Icon from "./Icon.svelte";
+  import SesAyarlariPanel from "./SesAyarlari.svelte";
+  import type { SesAyarlari } from "$lib/ses-ayarlari";
 
-  let { mod, onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen, onToggleGorunum, onLeave }: {
+  let ayarlarAcik = $state(false);
+
+  let { mod, onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen, onToggleGorunum, onSesAyari, onLeave }: {
     mod: GorunumModu;
     onToggleMute: () => void;
     onToggleDeafen: () => void;
     onToggleCamera: () => void;
     onToggleScreen: () => void;
     onToggleGorunum: () => void;
+    onSesAyari: (a: SesAyarlari) => void;
     onLeave: () => void;
   } = $props();
 </script>
@@ -46,6 +51,18 @@
   </div>
 
   <div class="sag">
+    <div class="ayarSarmal">
+      <button
+        class="dugme"
+        class:acik={ayarlarAcik}
+        aria-label={ayarlarAcik ? "Ses ayarlarını kapat" : "Ses ayarları"}
+        onclick={() => (ayarlarAcik = !ayarlarAcik)}
+      ><Icon ad="ayar" /></button>
+      {#if ayarlarAcik}
+        <SesAyarlariPanel onKapat={() => (ayarlarAcik = false)} onDegis={onSesAyari} />
+      {/if}
+    </div>
+
     <button
       class="dugme"
       class:acik={mod === "video"}
@@ -62,6 +79,9 @@
 </div>
 
 <style>
+  /* Panel cubugun USTUNDE acilir; sarmal konumlandirmayi tasir. */
+  .ayarSarmal { position: relative; display: flex; }
+
   .cubuk {
     display: flex; align-items: center; gap: 6px;
     padding: 8px 12px; border-top: 1px solid var(--cizgi);

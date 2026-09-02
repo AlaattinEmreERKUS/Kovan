@@ -3,17 +3,19 @@
   import { voice } from "$lib/voice.svelte";
   import { sahneDuzeni } from "$lib/stage";
   import { izgaraOlcusu } from "$lib/izgara";
+  import type { SesAyarlari } from "$lib/ses-ayarlari";
   import { gorunumOku, gorunumYaz, type GorunumModu } from "$lib/gorunum";
   import StageTile from "./StageTile.svelte";
   import VideoTile from "./VideoTile.svelte";
   import VoiceControls from "./VoiceControls.svelte";
 
-  let { selfId, onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen, onLeave }: {
+  let { selfId, onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen, onSesAyari, onLeave }: {
     selfId: string;
     onToggleMute: () => void;
     onToggleDeafen: () => void;
     onToggleCamera: () => void;
     onToggleScreen: () => void;
+    onSesAyari: (a: SesAyarlari) => void;
     onLeave: () => void;
   } = $props();
 
@@ -115,6 +117,7 @@
     {onToggleCamera}
     {onToggleScreen}
     onToggleGorunum={gorunumDegistir}
+    {onSesAyari}
     {onLeave}
   />
 </section>

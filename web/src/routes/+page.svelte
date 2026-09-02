@@ -107,6 +107,11 @@
         video: document.querySelectorAll('[data-kare] video').length,
       },
       gorunum: localStorage.getItem("kovan_gorunum"),
+      sesAyarlari: voice.sesAyarlari,
+      girisSeviyesi: Number(voice.girisSeviyesi.toFixed(4)),
+      // Tarayici filtreleri GERCEKTEN uygulandi mi: istedigimiz kisit ile
+      // cihazin verdigi ayar farkli olabilir.
+      mikrofonAyari: oturum?.mikAyari() ?? null,
     });
   });
 
@@ -163,6 +168,7 @@
         onToggleDeafen={() => oturum?.setDeafened(!voice.deafened)}
         onToggleCamera={() => void oturum?.setCamera(!voice.camera)}
         onToggleScreen={() => void ekranDugmesi()}
+        onSesAyari={(a) => void oturum?.setSesAyarlari(a)}
         onLeave={ayril}
       />
     {:else}

@@ -1,4 +1,5 @@
 import { buildConstraints } from "./share";
+import { mikKisitlari, sesAyarlariOku, type SesAyarlari } from "../ses-ayarlari";
 
 export interface MediaDeps {
   getUserMedia(c: MediaStreamConstraints): Promise<MediaStream>;
@@ -9,10 +10,9 @@ export interface MediaDeps {
  * Tarayici hoparlorunun mikrofona geri beslemesi echoCancellation olmadan
  * mesh'te herkese yankiyla gider; ucu de acik birakilir.
  */
-export const MIC_CONSTRAINTS: MediaStreamConstraints = {
-  audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-  video: false,
-};
+export function micConstraints(a: SesAyarlari = sesAyarlariOku()): MediaStreamConstraints {
+  return { audio: mikKisitlari(a), video: false };
+}
 
 export const CAM_CONSTRAINTS: MediaStreamConstraints = {
   audio: false,
@@ -38,9 +38,22 @@ export class LocalMedia {
   async startMic(): Promise<MediaStreamTrack> {
     // Zaten acikken yeniden istemek Chrome'da izin balonunu tekrar acabilir.
     if (this.mic) return this.mic;
-    const stream = await this.deps.getUserMedia(MIC_CONSTRAINTS);
+    const stream = await this.deps.getUserMedia(micConstraints());
     this.mic = stream.getAudioTracks()[0];
     return this.mic;
+  }
+
+  /**
+   * Filtreleri CANLI degistirir: mikrofonu yeniden istemek Chrome'da izin
+   * balonunu tekrar acabilir ve track degisince yeniden negotiation gerekir.
+   */
+  async setFiltreler(a: SesAyarlari): Promise<void> {
+    if (!this.mic) return;
+    try {
+      await this.mic.applyConstraints(mikKisitlari(a));
+    } catch {
+      // Bazi cihazlar bu kisitlari desteklemez; ses filtresiz devam eder.
+    }
   }
 
   /**
