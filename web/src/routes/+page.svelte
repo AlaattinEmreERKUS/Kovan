@@ -6,6 +6,7 @@
   import { store } from "$lib/store.svelte";
   import { voice } from "$lib/voice.svelte";
   import { VoiceSession } from "$lib/rtc/session";
+  import { isTauri, kopru, kisayolDinle } from "$lib/masaustu";
   import ChannelRail from "$lib/components/ChannelRail.svelte";
   import MessageList from "$lib/components/MessageList.svelte";
   import Composer from "$lib/components/Composer.svelte";
@@ -70,6 +71,16 @@
     if (import.meta.env.DEV) {
       // Playwright kancasi: yalnizca dev build'de tanimlanir.
       (window as unknown as { __kovan?: unknown }).__kovan = { oturum, voice };
+    }
+
+    // GECICI — S6 Gorev 2 olcum kapisi (R7): Tauri uzak sayfaya IPC
+    // koprusunu enjekte ediyor mu? Yalnizca RAPOR eder, hicbir seye
+    // dokunmaz. Gorev 8'de kalici hale gelecek ve kisayollar oturum
+    // metotlarina baglanacak. Tarayicida bu blok hic calismaz.
+    if (isTauri()) {
+      const k = kopru();
+      console.log("[olcum] kopru:", k !== null);
+      if (k) void kisayolDinle(k, (o) => console.log("[olcum] kisayol", o));
     }
     // Uretimde de duran TESHIS ciktisi. Canlida gorulen ama yerelde
     // uretilemeyen hatalarin (kamera kayboluyor, ekran gorunmuyor) tek
