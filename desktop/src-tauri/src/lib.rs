@@ -55,6 +55,18 @@ pub fn run() {
             .setup(move |app| {
                 app.global_shortcut().register(ptt)?;
                 println!("[olcum] F8 kaydedildi. Baska pencereye tikla, bas ve birak.");
+                // Olcum kapisinin cevabi TERMINALDE degil KONSOLDA: asagidaki
+                // println yalnizca kisayolun kaydoldugunu soyler, olayin uzak
+                // origindeki sayfaya ulastigini soylemez. Konsolu elle aramak
+                // yerine acilista aciyoruz. Yalniz hata ayiklama derlemesinde;
+                // surum derlemesinde bu blok hic yok.
+                #[cfg(debug_assertions)]
+                {
+                    use tauri::Manager;
+                    if let Some(w) = app.get_webview_window("main") {
+                        w.open_devtools();
+                    }
+                }
                 Ok(())
             })
     };
