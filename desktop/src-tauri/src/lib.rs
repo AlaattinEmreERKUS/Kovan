@@ -1,77 +1,131 @@
-// Kovan masaustu — S6 Gorev 2: OLCUM KAPISI (R7).
-//
-// Sorulan tek soru: Tauri v2, kontrol etmedigi bir UZAK sayfaya IPC
-// koprusunu enjekte ediyor mu? Spike bunu YEREL sayfada olcmustu
-// (frontendDist: "../src"); uzak origin farkli bir soru.
-//
-// Bu dosya bilerek ASGARI: tek kisayol (F8), tek olay. Uc kisayol, komut
-// yuzeyi ve tepsi Gorev 7 ve 9'da geliyor. Once kapinin gectigini gorelim.
+// Kovan masaustu. Rust HICBIR ses durumu tutmaz (K6): yalnizca global
+// kisayolu kaydeder ve olayi sayfaya yayar. Mute/deafen kararinin tek
+// sahibi web tarafindaki `voice` store'udur.
+
+use std::sync::Mutex;
 
 #[cfg(desktop)]
 use tauri::Emitter;
+use tauri::Manager;
 #[cfg(desktop)]
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Shortcut, ShortcutState};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
-/// Sayfaya yayilan olay govdesi. web/src/lib/masaustu.ts icindeki
-/// `KisayolOlayi` ile birebir ayni alanlari tasir.
 #[derive(Clone, serde::Serialize)]
 struct KisayolOlayi {
     ad: String,
     durum: String,
 }
 
+#[derive(Clone, serde::Deserialize)]
+struct Kisayollar {
+    ptt: String,
+    mik: String,
+    kulaklik: String,
+}
+
+#[derive(Clone, serde::Serialize)]
+struct KayitSonucu {
+    ad: String,
+    kayitli: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sebep: Option<String>,
+}
+
+/// Kayitli kisayol -> ad eslemesi. Handler hangi ada karsilik geldigini
+/// buradan okur; Shortcut'in kendisi ad tasimaz.
+#[derive(Default)]
+struct KisayolHaritasi(Mutex<Vec<(Shortcut, String)>>);
+
+#[tauri::command]
+fn kisayollari_ayarla(
+    app: tauri::AppHandle,
+    kisayollar: Kisayollar,
+) -> Result<Vec<KayitSonucu>, String> {
+    let gs = app.global_shortcut();
+    let harita = app.state::<KisayolHaritasi>();
+
+    // Once eskileri sok: kullanici tusu degistirdiginde eskisi calismaya
+    // devam ederse iki tus ayni isi yapar.
+    {
+        let mut kilit = harita.0.lock().map_err(|e| e.to_string())?;
+        for (kisayol, _) in kilit.iter() {
+            let _ = gs.unregister(*kisayol);
+        }
+        kilit.clear();
+    }
+
+    let istekler = [
+        ("ptt", kisayollar.ptt),
+        ("mik", kisayollar.mik),
+        ("kulaklik", kisayollar.kulaklik),
+    ];
+
+    let mut sonuclar = Vec::new();
+    for (ad, tus) in istekler {
+        match tus.parse::<Shortcut>() {
+            Err(e) => sonuclar.push(KayitSonucu {
+                ad: ad.into(),
+                kayitli: false,
+                sebep: Some(format!("Tus dizisi cozulemedi: {e}")),
+            }),
+            Ok(kisayol) => match gs.register(kisayol) {
+                // Windows kaydi reddedince bas-konus SESSIZCE olurdu (K5).
+                Err(e) => sonuclar.push(KayitSonucu {
+                    ad: ad.into(),
+                    kayitli: false,
+                    sebep: Some(e.to_string()),
+                }),
+                Ok(()) => {
+                    harita
+                        .0
+                        .lock()
+                        .map_err(|e| e.to_string())?
+                        .push((kisayol, ad.to_string()));
+                    sonuclar.push(KayitSonucu { ad: ad.into(), kayitli: true, sebep: None });
+                }
+            },
+        }
+    }
+    Ok(sonuclar)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default();
+    let builder = tauri::Builder::default().manage(KisayolHaritasi::default());
 
     #[cfg(desktop)]
-    let builder = {
-        let ptt = Shortcut::new(None, Code::F8);
-        builder
-            .plugin(
-                tauri_plugin_global_shortcut::Builder::new()
-                    .with_handler(move |app, kisayol, event| {
-                        if kisayol != &ptt {
-                            return;
-                        }
-                        let durum = match event.state() {
-                            ShortcutState::Pressed => "Pressed",
-                            ShortcutState::Released => "Released",
-                        };
-                        // Konsol ciktisi Rust tarafinin tetiklendigini
-                        // kanitlar; sayfada gorunmezse sorun IPC'dedir,
-                        // kisayol kaydinda degil. Ikisini ayirmak icin.
-                        println!("[olcum] F8 {durum}");
-                        let _ = app.emit(
-                            "kisayol",
-                            KisayolOlayi {
-                                ad: "ptt".into(),
-                                durum: durum.into(),
-                            },
-                        );
-                    })
-                    .build(),
-            )
-            .setup(move |app| {
-                app.global_shortcut().register(ptt)?;
-                println!("[olcum] F8 kaydedildi. Baska pencereye tikla, bas ve birak.");
-                // Olcum kapisinin cevabi TERMINALDE degil KONSOLDA: asagidaki
-                // println yalnizca kisayolun kaydoldugunu soyler, olayin uzak
-                // origindeki sayfaya ulastigini soylemez. Konsolu elle aramak
-                // yerine acilista aciyoruz. Yalniz hata ayiklama derlemesinde;
-                // surum derlemesinde bu blok hic yok.
-                #[cfg(debug_assertions)]
-                {
-                    use tauri::Manager;
-                    if let Some(w) = app.get_webview_window("main") {
-                        w.open_devtools();
-                    }
-                }
-                Ok(())
+    let builder = builder.plugin(
+        tauri_plugin_global_shortcut::Builder::new()
+            .with_handler(|app, kisayol, event| {
+                let harita = app.state::<KisayolHaritasi>();
+                let Ok(kilit) = harita.0.lock() else { return };
+                let Some((_, ad)) = kilit.iter().find(|(k, _)| k == kisayol) else {
+                    return;
+                };
+                let durum = match event.state() {
+                    ShortcutState::Pressed => "Pressed",
+                    ShortcutState::Released => "Released",
+                };
+                let _ = app.emit(
+                    "kisayol",
+                    KisayolOlayi { ad: ad.clone(), durum: durum.into() },
+                );
             })
-    };
+            .build(),
+    );
 
     builder
+        .setup(|app| {
+            // Uzak sayfada hata ayiklamanin tek yolu konsol; elle aranmasin.
+            // Yalniz hata ayiklama derlemesinde, surum derlemesinde blok yok.
+            #[cfg(debug_assertions)]
+            if let Some(w) = app.get_webview_window("main") {
+                w.open_devtools();
+            }
+            let _ = app;
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![kisayollari_ayarla])
         .run(tauri::generate_context!())
         .expect("Kovan baslatilamadi");
 }
