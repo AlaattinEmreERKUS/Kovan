@@ -1,3 +1,5 @@
+import { GIRIS_MODU_VARSAYILAN, type GirisModu } from "./rtc/kapi";
+
 /**
  * Giden mikrofonun isleme ayarlari. Hepsi KISIYE OZEL ve yerel: sunucuya
  * gitmez, karsi tarafa bildirilmez.
@@ -8,6 +10,8 @@ export interface SesAyarlari {
   yankiEngelleme: boolean;
   gurultuBastirma: boolean;
   otomatikSeviye: boolean;
+  /** Kapiyi ne kumanda eder. Bas-konus yalniz masaustunde secilebilir. */
+  girisModu: GirisModu;
 }
 
 export const ESIK_MAKS = 0.1;
@@ -18,6 +22,7 @@ export const SES_AYARI_VARSAYILAN: SesAyarlari = {
   yankiEngelleme: true,
   gurultuBastirma: true,
   otomatikSeviye: true,
+  girisModu: GIRIS_MODU_VARSAYILAN,
 };
 
 const ANAHTAR = "kovan_ses_ayarlari";
@@ -44,6 +49,12 @@ function bayrak(v: unknown, varsayilan: boolean): boolean {
   return typeof v === "boolean" ? v : varsayilan;
 }
 
+/** Taninmayan deger varsayilana duser: eski ya da elle bozulmus kayit
+ * uygulamayi durdurmamali. */
+function mod(v: unknown): GirisModu {
+  return v === "bas-konus" || v === "ses-etkinligi" ? v : GIRIS_MODU_VARSAYILAN;
+}
+
 export function sesAyarlariOku(depo: DepoBenzeri | null = varsayilanDepo()): SesAyarlari {
   if (!depo) return { ...SES_AYARI_VARSAYILAN };
   try {
@@ -55,6 +66,7 @@ export function sesAyarlariOku(depo: DepoBenzeri | null = varsayilanDepo()): Ses
       yankiEngelleme: bayrak(o.yankiEngelleme, SES_AYARI_VARSAYILAN.yankiEngelleme),
       gurultuBastirma: bayrak(o.gurultuBastirma, SES_AYARI_VARSAYILAN.gurultuBastirma),
       otomatikSeviye: bayrak(o.otomatikSeviye, SES_AYARI_VARSAYILAN.otomatikSeviye),
+      girisModu: mod(o.girisModu),
     };
   } catch {
     // Bozuk ya da okunamayan kayit ayarlari sifirlar, uygulamayi durdurmaz.

@@ -16,9 +16,9 @@ describe("ses ayarlari", () => {
 
   it("yazilan ayar geri okunur", () => {
     const d = depo();
-    sesAyarlariYaz({ esik: 0.04, yankiEngelleme: false, gurultuBastirma: false, otomatikSeviye: true }, d);
+    sesAyarlariYaz({ ...SES_AYARI_VARSAYILAN, esik: 0.04, yankiEngelleme: false, gurultuBastirma: false, otomatikSeviye: true }, d);
     expect(sesAyarlariOku(d)).toEqual({
-      esik: 0.04, yankiEngelleme: false, gurultuBastirma: false, otomatikSeviye: true,
+      ...SES_AYARI_VARSAYILAN, esik: 0.04, yankiEngelleme: false, gurultuBastirma: false, otomatikSeviye: true,
     });
   });
 
@@ -45,7 +45,39 @@ describe("ses ayarlari", () => {
   });
 
   it("kisitlar tarayici adlarina cevrilir", () => {
-    expect(mikKisitlari({ esik: 0, yankiEngelleme: true, gurultuBastirma: false, otomatikSeviye: true }))
+    expect(mikKisitlari({ ...SES_AYARI_VARSAYILAN, esik: 0, yankiEngelleme: true, gurultuBastirma: false, otomatikSeviye: true }))
       .toEqual({ echoCancellation: true, noiseSuppression: false, autoGainControl: true });
+  });
+});
+
+describe("giris modu", () => {
+  function sahteDepo(baslangic: string | null) {
+    let deger = baslangic;
+    return {
+      getItem: () => deger,
+      setItem: (_a: string, d: string) => { deger = d; },
+      oku: () => deger,
+    };
+  }
+
+  it("kayit yoksa ses etkinligi varsayilan", () => {
+    expect(sesAyarlariOku(sahteDepo(null)).girisModu).toBe("ses-etkinligi");
+  });
+
+  it("kayitli mod okunur", () => {
+    const d = sahteDepo(JSON.stringify({ girisModu: "bas-konus" }));
+    expect(sesAyarlariOku(d).girisModu).toBe("bas-konus");
+  });
+
+  it("taninmayan mod varsayilana duser", () => {
+    // Eski surumden kalan ya da elle bozulmus kayit uygulamayi durdurmamali.
+    const d = sahteDepo(JSON.stringify({ girisModu: "zart" }));
+    expect(sesAyarlariOku(d).girisModu).toBe("ses-etkinligi");
+  });
+
+  it("yazilan ayar geri okununca korunur", () => {
+    const d = sahteDepo(null);
+    sesAyarlariYaz({ ...SES_AYARI_VARSAYILAN, girisModu: "bas-konus" }, d);
+    expect(sesAyarlariOku(d).girisModu).toBe("bas-konus");
   });
 });

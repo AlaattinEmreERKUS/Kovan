@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { LocalMedia, micConstraints, type MediaDeps } from "./media";
+import { SES_AYARI_VARSAYILAN } from "../ses-ayarlari";
 
 function sahteTrack(kind: "audio" | "video") {
   return { kind, enabled: true, readyState: "live", stop: vi.fn(), onended: null } as unknown as MediaStreamTrack;
@@ -44,6 +45,7 @@ describe("LocalMedia mikrofon", () => {
     const uygula = vi.fn(async () => {});
     (media.mic as unknown as { applyConstraints: unknown }).applyConstraints = uygula;
     await media.setFiltreler({
+      ...SES_AYARI_VARSAYILAN,
       esik: 0.02, yankiEngelleme: false, gurultuBastirma: true, otomatikSeviye: false,
     });
     expect(uygula).toHaveBeenCalledWith({
@@ -57,6 +59,7 @@ describe("LocalMedia mikrofon", () => {
     (media.mic as unknown as { applyConstraints: unknown }).applyConstraints =
       vi.fn(async () => { throw new Error("desteklenmiyor"); });
     await expect(media.setFiltreler({
+      ...SES_AYARI_VARSAYILAN,
       esik: 0, yankiEngelleme: true, gurultuBastirma: true, otomatikSeviye: true,
     })).resolves.toBeUndefined();
   });
