@@ -53,7 +53,9 @@
   nav {
     width: 190px; display: flex; flex-direction: column;
     border-right: 1px solid var(--cizgi); padding: 14px 10px;
-    background: var(--zemin-1);
+    background: var(--zemin-1); flex: none;
+    /* Uye listesiyle ayni kural: tasma sutunun icinde kalir. */
+    min-height: 0; overflow-y: auto; overscroll-behavior: contain;
   }
   .baslik { font-weight: 600; letter-spacing: 0.02em; padding: 0 6px 12px; }
   ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }

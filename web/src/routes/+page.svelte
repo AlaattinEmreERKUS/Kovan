@@ -195,8 +195,15 @@
 </div>
 
 <style>
-  .kabuk { display: flex; height: 100vh; }
-  main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  /* Sutunlarin HER BIRI kendi icinde kayar; govde HIC kaymaz. overflow
+     hidden olmazsa uzun uye listesi 100vh'yi tasirir, sayfa asagi kayar ve
+     kanal rayi ile sohbet ekrandan cikar -- "asagidaki uyeye bakayim"
+     derken sohbeti kaybediyordun. */
+  .kabuk { display: flex; height: 100dvh; overflow: hidden; }
+  /* min-height: 0 SART. Flex cocugunun varsayilan alt siniri icerigi kadardir;
+     onsuz main mesaj sayisiyla birlikte buyur ve .liste'nin overflow-y: auto
+     kurali hicbir sey yapmaz. */
+  main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   .ust {
     display: flex; align-items: center; gap: 8px;
     padding: 12px 16px; border-bottom: 1px solid var(--cizgi); font-weight: 600;

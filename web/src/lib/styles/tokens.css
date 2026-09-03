@@ -3,6 +3,10 @@
   --zemin-1: #131110;
   --zemin-2: #1B1917;
   --cizgi: rgba(255, 255, 255, 0.07);
+  /* Kaydirma cubugu cizgiden kalin olmali: --cizgi (0.07) ayirici olarak
+     dogru ama tutamak olarak gorunmuyor ve fareyle yakalanamiyor. */
+  --kaydirici: rgba(255, 255, 255, 0.14);
+  --kaydirici-uzeri: rgba(255, 255, 255, 0.26);
 
   --metin-1: #EDE9E3;
   --metin-2: #A19B92;
@@ -61,3 +65,26 @@ button {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Kaydirma cubugu.
+   Windows'un varsayilan cubugu bu paletin icinde yabanci duruyordu: genis,
+   parlak gri bir serit. Once `scrollbar-width` denenir (Firefox ve yeni
+   Chromium), webkit kurallari eski surumler icin durur. Cubuk yalniz
+   ustune gelince belirginlesir; duran hali zeminle neredeyse ayni tonda. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--kaydirici) transparent;
+}
+
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--kaydirici);
+  border-radius: 999px;
+  /* Saydam kenarlik + background-clip: cubuk inceltilirken kenar bosluguna
+     zemin rengi boyamak gerekmez, her sutunda dogru gorunur. */
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--kaydirici-uzeri); background-clip: content-box; }
+*::-webkit-scrollbar-corner { background: transparent; }
