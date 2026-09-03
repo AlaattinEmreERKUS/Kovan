@@ -122,3 +122,54 @@ describe("MikrofonIsleyici", () => {
     vi.useRealTimers();
   });
 });
+
+describe("MikrofonIsleyici bas-konus", () => {
+  it("bas-konus modunda esik 0 OLSA BILE tus basili degilken kapi kapali", () => {
+    // Tuzak: esik 0 "kapi devre disi" demek ve ses etkinliginde her sey gecer.
+    // Bas-konusta bu kisayol UYGULANMAMALI, yoksa tus hic islemez.
+    vi.useFakeTimers();
+    const { isleyici, gain } = kur({ v: 0 }, 0, { t: 0 });
+    isleyici.setMod("bas-konus");
+    isleyici.setBasili(false);
+    vi.advanceTimersByTime(50);
+    expect(gain.gain.value).toBe(0);
+    isleyici.close();
+    vi.useRealTimers();
+  });
+
+  it("bas-konus modunda tus basiliyken kapi acik", () => {
+    vi.useFakeTimers();
+    const { isleyici, gain } = kur({ v: 0 }, 0.015, { t: 0 });
+    isleyici.setMod("bas-konus");
+    isleyici.setBasili(true);
+    vi.advanceTimersByTime(50);
+    expect(gain.gain.value).toBe(1);
+    isleyici.close();
+    vi.useRealTimers();
+  });
+
+  it("ses etkinligi modunda tus durumu yok sayilir", () => {
+    vi.useFakeTimers();
+    const { isleyici, gain } = kur({ v: 0.01 }, 0.9, { t: 0 });
+    isleyici.setMod("ses-etkinligi");
+    isleyici.setBasili(true);
+    vi.advanceTimersByTime(50); // sahte sinyal esigin altinda
+    expect(gain.gain.value).toBe(0);
+    isleyici.close();
+    vi.useRealTimers();
+  });
+
+  it("tus birakilinca sonraki ornegi BEKLEMEZ", () => {
+    // 50 ms'lik ornekleme araligi bas-konusta dogrudan kesik kelime demek:
+    // tus olayi aninda uygulanmali.
+    vi.useFakeTimers();
+    const { isleyici, gain } = kur({ v: 0 }, 0.015, { t: 0 });
+    isleyici.setMod("bas-konus");
+    isleyici.setBasili(true);
+    expect(gain.gain.value).toBe(1);
+    isleyici.setBasili(false);
+    expect(gain.gain.value).toBe(0);
+    isleyici.close();
+    vi.useRealTimers();
+  });
+});

@@ -511,3 +511,34 @@ describe("VoiceSession ekran kaynagi degistirme", () => {
     expect(voice.screen).toBe(false);
   });
 });
+
+describe("VoiceSession bas-konus", () => {
+  it("setPttBasili isleyiciye tasinir", async () => {
+    const { session } = kur();
+    await session.join();
+    const cagrilar: boolean[] = [];
+    (session as unknown as { mikIsleyici: { setBasili(b: boolean): void } }).mikIsleyici = {
+      setBasili: (b: boolean) => cagrilar.push(b),
+    } as never;
+
+    session.setPttBasili(true);
+    session.setPttBasili(false);
+
+    expect(cagrilar).toEqual([true, false]);
+  });
+
+  it("mute aciksa bas-konus ses gondermez", () => {
+    // K3: acik mute her seyi yener. Kapi acilsa bile track enabled=false.
+    const { session } = kur();
+    session.setMuted(true);
+    session.setPttBasili(true);
+    expect(voice.muted).toBe(true);
+  });
+
+  it("isleyici yokken setPttBasili patlamaz", () => {
+    // Ses kanalina girmeden kisayola basmak mumkun; +page.svelte bunu
+    // filtreliyor ama oturum kendi basina da dayanikli olmali.
+    const { session } = kur();
+    expect(() => session.setPttBasili(true)).not.toThrow();
+  });
+});

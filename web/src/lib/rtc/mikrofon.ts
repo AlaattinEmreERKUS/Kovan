@@ -1,4 +1,4 @@
-import { kapiKarari, kapiKapali, type KapiDurumu } from "./kapi";
+import { kapiKarari, kapiKapali, type GirisModu, type KapiDurumu } from "./kapi";
 import { rmsOf } from "./speaking";
 
 export interface IsleyiciSecenekleri {
@@ -37,6 +37,8 @@ export class MikrofonIsleyici {
   private durum: KapiDurumu = { acik: false, sonSes: Number.NEGATIVE_INFINITY };
   private zamanlayici: ReturnType<typeof setInterval> | null = null;
   private esik: number;
+  private mod: GirisModu = "ses-etkinligi";
+  private basili = false;
 
   /** Mesh'e verilecek track. */
   readonly cikis: MediaStreamTrack;
@@ -64,8 +66,23 @@ export class MikrofonIsleyici {
   setEsik(esik: number): void {
     this.esik = esik;
     // Kapi devre disi birakildiginda acik kalmali; aksi halde bir sonraki
-    // orneklemeye kadar ses kesik gider.
-    if (kapiKapali(esik)) this.uygula(true);
+    // orneklemeye kadar ses kesik gider. Yalniz ses etkinliginde: bas-konusta
+    // esik 0'in kapiyi acmasi tusu tamamen islevsiz birakirdi.
+    if (this.mod === "ses-etkinligi" && kapiKapali(esik)) this.uygula(true);
+  }
+
+  setMod(mod: GirisModu): void {
+    this.mod = mod;
+    // Moda gecerken kapiyi kapali birak: bas-konusa gecince tusa basmadan
+    // ses gitmesin, ses etkinligine donunce de bayat karar uygulanmasin.
+    if (mod === "bas-konus") this.uygula(false);
+  }
+
+  setBasili(basili: boolean): void {
+    this.basili = basili;
+    // Tus olayini bir sonraki ornege (50 ms) birakmiyoruz: bas-konusta
+    // gecikme dogrudan kesik kelime demek.
+    if (this.mod === "bas-konus") this.uygula(basili);
   }
 
   close(): void {
@@ -81,17 +98,17 @@ export class MikrofonIsleyici {
     this.analyser.getFloatTimeDomainData(this.tampon);
     const seviye = rmsOf(this.tampon);
 
-    if (kapiKapali(this.esik)) {
+    // Esik 0 "kapi devre disi" demek, ama bu YALNIZ ses etkinliginde gecerli.
+    if (this.mod === "ses-etkinligi" && kapiKapali(this.esik)) {
       this.uygula(true);
       this.o.onSeviye?.(seviye, true);
       return;
     }
-    // Mod simdilik sabit; gercek modu ve tus durumunu Gorev 5 bagliyor.
     this.durum = kapiKarari({
-      mod: "ses-etkinligi",
+      mod: this.mod,
       seviye,
       esik: this.esik,
-      basili: false,
+      basili: this.basili,
       onceki: this.durum,
       simdi: this.o.simdi?.() ?? performance.now(),
     });

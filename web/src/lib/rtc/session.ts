@@ -87,6 +87,7 @@ export class VoiceSession {
             else voice.speaking.delete(this.o.selfId);
           },
         });
+        this.mikIsleyici.setMod(voice.sesAyarlari.girisModu);
       }
       this.mixer = ekranMikseri(this.audioCtx);
       this.mixer.setDeafened(voice.deafened);
@@ -164,7 +165,13 @@ export class VoiceSession {
     voice.sesAyarlari = a;
     sesAyarlariYaz(a);
     this.mikIsleyici?.setEsik(a.esik);
+    this.mikIsleyici?.setMod(a.girisModu);
     await this.media.setFiltreler(a);
+  }
+
+  /** Global kisayoldan gelir. Ses kanalinda degilken cagrilmaz (+page.svelte). */
+  setPttBasili(basili: boolean): void {
+    this.mikIsleyici?.setBasili(basili);
   }
 
   setMuted(muted: boolean): void {
