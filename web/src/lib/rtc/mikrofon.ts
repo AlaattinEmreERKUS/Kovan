@@ -86,7 +86,15 @@ export class MikrofonIsleyici {
       this.o.onSeviye?.(seviye, true);
       return;
     }
-    this.durum = kapiKarari(seviye, this.esik, this.durum, this.o.simdi?.() ?? performance.now());
+    // Mod simdilik sabit; gercek modu ve tus durumunu Gorev 5 bagliyor.
+    this.durum = kapiKarari({
+      mod: "ses-etkinligi",
+      seviye,
+      esik: this.esik,
+      basili: false,
+      onceki: this.durum,
+      simdi: this.o.simdi?.() ?? performance.now(),
+    });
     this.uygula(this.durum.acik);
     this.o.onSeviye?.(seviye, this.durum.acik);
   }
