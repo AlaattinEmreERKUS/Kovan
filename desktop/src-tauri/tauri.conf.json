@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.kovan.desktop",
   "build": {
+    "beforeDevCommand": "npm run dev:web",
     "devUrl": "http://127.0.0.1:5173",
     "frontendDist": "https://kovan-web.pages.dev"
   },
