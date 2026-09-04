@@ -38,9 +38,22 @@
     aktifSekme = "metin";
   }
 
+  // Kopma ses sekmesinde yakaladiysa geri baglanmada oraya donulur.
+  let sesSekmesineDon = $state(false);
+
   // Baglanti koparsa resetVoice joined'i dusurur; sahne kilitli kalmamali.
   $effect(() => {
-    if (!voice.joined && aktifSekme === "ses") aktifSekme = "metin";
+    if (voice.joined) {
+      if (sesSekmesineDon) {
+        sesSekmesineDon = false;
+        aktifSekme = "ses";
+      }
+      return;
+    }
+    if (aktifSekme === "ses") {
+      sesSekmesineDon = true;
+      aktifSekme = "metin";
+    }
   });
 
   // Yuzey ve sistem sesi secimi tarayicinin kendi secicisinde yapiliyor;

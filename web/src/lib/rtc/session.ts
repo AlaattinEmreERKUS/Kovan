@@ -21,6 +21,14 @@ export interface SessionOptions {
   createAudioContext?(): AudioContext | null;
 }
 
+/**
+ * Sinyal kanali koptuktan sonra baglantilarin ne kadar ayakta tutulacagi.
+ * Ses P2P akar: WS'in bir kac saniyeligine gitmesi konusmayi kesmemeli.
+ * Connection'in backoff'u 1-2-4-8 sn ilerledigi icin bu pencere ~4 denemeyi
+ * kapsar. Suresi dolarsa baglantilar gercekten birakilir.
+ */
+const KOPUS_TOLERANSI = 15_000;
+
 /** TURN alinamazsa bile kanal acilir; ev aglarinin cogunda STUN yeter. */
 const YEDEK_ICE: RTCIceServer[] = [{ urls: "stun:stun.cloudflare.com:3478" }];
 
@@ -40,15 +48,32 @@ export class VoiceSession {
   micMixer: RemoteAudioMixer | null = null;
   /** Giden mikrofonun kapisi. Yoksa ham track gonderilir. */
   private mikIsleyici: MikrofonIsleyici | null = null;
+  /**
+   * Kullanici ses kanalinda OLMAK ISTIYOR mu. `voice.joined` fiili durumdur ve
+   * kopmada dusurulur; niyet kopmayi asar. Ikisini ayirmadan "ag koptu" ile
+   * "kullanici cikti" ayirt edilemiyor ve geri baglanmada kimse kanala
+   * donmuyordu.
+   */
+  private katilmaNiyeti = false;
+  /** Kopma anindaki susturma durumu; geri katilimda geri yuklenir. */
+  private niyetMuted = false;
+  private niyetDeafened = false;
+  /** Kopus toleransi sayaci. Dolu = baglantilar askida tutuluyor. */
+  private askiZamanlayici: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private o: SessionOptions) {
     this.media = o.media ?? new LocalMedia();
     o.conn.onVoiceMembers = (members) => this.onMembers(members);
     o.conn.onSignal = (from, data) => this.mesh?.handleSignal(from, data as SignalPayload);
+    o.conn.onDisconnect = () => this.kopus();
+    o.conn.onReconnect = () => this.yenidenKatil();
   }
 
   async join(): Promise<void> {
-    if (voice.joined) return;
+    // Guard `voice.joined` DEGIL `mesh`: kopmada joined dusuyor ama mesh
+    // ayakta kalabiliyordu; o durumda ikinci join eskisini kapatmadan
+    // uzerine yeni bir mesh yaziyor ve tum PC'ler acik siziyordu.
+    if (this.mesh) return;
     voice.error = null;
 
     try {
@@ -112,6 +137,7 @@ export class VoiceSession {
     });
 
     voice.joined = true;
+    this.katilmaNiyeti = true;
     this.o.conn.send({ t: "voice.join" });
     // Sunucu yayini gelmeden once bilinen liste uygulanir: hello ile gelen
     // uyeler varsa baglanti hemen kurulmaya baslar.
@@ -120,8 +146,67 @@ export class VoiceSession {
   }
 
   leave(): void {
-    if (!voice.joined) return;
+    if (!this.mesh) return;
+    this.katilmaNiyeti = false;
     this.o.conn.send({ t: "voice.leave" });
+    this.temizle();
+  }
+
+  /**
+   * Sinyal kanali koptu. Baglantilar HEMEN yikilmaz: ses P2P akar ve kisa bir
+   * kopma konusmayi kesmemeli. Tolerans suresince mesh askida tutulur,
+   * suresi dolarsa gercekten birakilir. Sunucuya paket gitmez (socket olu)
+   * ve katilma niyeti korunur.
+   *
+   * `true` = store temizlenmemeli, kullanici hala duyuyor.
+   */
+  private kopus(): boolean {
+    if (!this.mesh) return false;
+    this.niyetMuted = voice.muted;
+    this.niyetDeafened = voice.deafened;
+    if (this.askiZamanlayici) return true;   // arka arkaya kopus: sayaci uzatma
+    this.askiZamanlayici = setTimeout(() => {
+      this.askiZamanlayici = null;
+      // Geri donmedi. Artik tutmanin anlami yok: bayat kareler ve olu
+      // baglantilar kullaniciyi konusuyor sanmaya devam ettirir.
+      this.temizle();
+      voice.members = [];
+    }, KOPUS_TOLERANSI);
+    return true;
+  }
+
+  /**
+   * Socket geri geldi. Iki yol var:
+   * - Mesh hala askida: baglantilar korunur, kanal sunucuya YENIDEN duyurulur
+   *   (yeni socket'te inVoice bastan false, bayraklar sifirlanmis olur).
+   *   Ses hic kesilmez.
+   * - Tolerans dolmus: bastan katilinir.
+   */
+  private yenidenKatil(): void {
+    if (!this.katilmaNiyeti) return;
+
+    if (this.mesh) {
+      if (!this.askiZamanlayici) return;   // kopus yok, normal acilis
+      clearTimeout(this.askiZamanlayici);
+      this.askiZamanlayici = null;
+      this.o.conn.send({ t: "voice.join" });
+      // Sunucu katilimda bayraklari sifirlar; mevcut durum geri yazilmali.
+      this.publish();
+      return;
+    }
+
+    void this.join().then(() => {
+      if (!voice.joined) return;
+      if (this.niyetDeafened) this.setDeafened(true);
+      else if (this.niyetMuted) this.setMuted(true);
+    });
+  }
+
+  private temizle(): void {
+    if (this.askiZamanlayici) {
+      clearTimeout(this.askiZamanlayici);
+      this.askiZamanlayici = null;
+    }
     this.mesh?.close();
     this.mesh = null;
     this.speaking?.stop();
@@ -299,9 +384,12 @@ export class VoiceSession {
   }
 
   destroy(): void {
+    this.katilmaNiyeti = false;
     this.leave();
     this.o.conn.onVoiceMembers = null;
     this.o.conn.onSignal = null;
+    this.o.conn.onDisconnect = null;
+    this.o.conn.onReconnect = null;
   }
 
   private publish(): void {

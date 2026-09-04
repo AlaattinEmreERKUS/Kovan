@@ -48,6 +48,7 @@ class SahtePC {
     }
   }
   async addIceCandidate(c: unknown) { this.eklenenAdaylar.push(c); }
+  restartIce = vi.fn(() => { this.onnegotiationneeded?.(); });
   close() { this.kapandi = true; }
 }
 
@@ -55,13 +56,15 @@ function kur(polite: boolean) {
   const pc = new SahtePC();
   const gonderilen: SignalPayload[] = [];
   const track: Array<[string, MediaStreamTrack]> = [];
+  const durumlar: RTCPeerConnectionState[] = [];
   const peer = new Peer({
     polite,
     pc: pc as unknown as RTCPeerConnection,
     sendSignal: (d) => gonderilen.push(d),
     onTrack: (slot, t) => track.push([slot, t]),
+    onStateChange: (d) => durumlar.push(d),
   });
-  return { pc, peer, gonderilen, track };
+  return { pc, peer, gonderilen, track, durumlar };
 }
 
 describe("isPolite", () => {
@@ -185,5 +188,68 @@ describe("Peer perfect negotiation", () => {
     expect(pc.kapandi).toBe(true);
     expect(pc.ontrack).toBeNull();
     expect(pc.onnegotiationneeded).toBeNull();
+  });
+});
+
+/**
+ * Ag dalgalanmasi ICE yolunu kalici olarak dusurebilir ("failed"). Once
+ * hicbir kurtarma yoktu: baglanti olu kalir, iki taraf da birbirini seste
+ * gorurken sessizce beklerdi. Yeniden deneme YALNIZCA impolite tarafta
+ * olmali; iki taraf da denerse offer cakismasi olur.
+ */
+describe("ICE kurtarma", () => {
+  it("impolite taraf failed durumunda ICE'i yeniden baslatir", () => {
+    const { pc } = kur(false);
+    pc.connectionState = "failed";
+    pc.onconnectionstatechange!();
+    expect(pc.restartIce).toHaveBeenCalledTimes(1);
+  });
+
+  it("polite taraf yeniden baslatmaz", () => {
+    const { pc } = kur(true);
+    pc.connectionState = "failed";
+    pc.onconnectionstatechange!();
+    expect(pc.restartIce).not.toHaveBeenCalled();
+  });
+
+  it("saglikli durumlarda dokunmaz", () => {
+    const { pc } = kur(false);
+    for (const durum of ["connecting", "connected", "disconnected"] as const) {
+      pc.connectionState = durum;
+      pc.onconnectionstatechange!();
+    }
+    expect(pc.restartIce).not.toHaveBeenCalled();
+  });
+
+  it("sonsuz denemez", () => {
+    const { pc } = kur(false);
+    for (let i = 0; i < 10; i++) {
+      pc.connectionState = "failed";
+      pc.onconnectionstatechange!();
+    }
+    expect(pc.restartIce.mock.calls.length).toBeLessThanOrEqual(3);
+  });
+
+  it("araya basarili baglanti girerse deneme hakki tazelenir", () => {
+    const { pc } = kur(false);
+    for (let i = 0; i < 5; i++) {
+      pc.connectionState = "failed";
+      pc.onconnectionstatechange!();
+    }
+    const tukenmis = pc.restartIce.mock.calls.length;
+
+    pc.connectionState = "connected";
+    pc.onconnectionstatechange!();
+    pc.connectionState = "failed";
+    pc.onconnectionstatechange!();
+
+    expect(pc.restartIce.mock.calls.length).toBe(tukenmis + 1);
+  });
+
+  it("durum degisikligi yine de yukari bildirilir", () => {
+    const { pc, durumlar } = kur(false);
+    pc.connectionState = "failed";
+    pc.onconnectionstatechange!();
+    expect(durumlar).toContain("failed");
   });
 });

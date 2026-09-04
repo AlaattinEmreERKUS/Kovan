@@ -17,6 +17,17 @@ export class Connection {
   /** Mesh bu geri cagrilara baglanir (Task 11). */
   onVoiceMembers: ((members: VoiceMember[]) => void) | null = null;
   onSignal: ((from: string, data: unknown) => void) | null = null;
+  /**
+   * Sinyal kanali dustu. VoiceSession'in mesh'i, AudioContext'i ve mikrofonu
+   * BU CAGRIDA birakilir; store'u temizlemek yetmiyordu -- nesneler acik
+   * kaliyor, sonraki katilim uzerlerine yenisini yaziyordu.
+   *
+   * `true` dondururse oturum baglantilari kisa kopma toleransi boyunca AYAKTA
+   * tutuyor demektir ve store temizlenmez.
+   */
+  onDisconnect: (() => boolean | void) | null = null;
+  /** Socket geri geldi. Kopmadan once seste olan kendiliginden geri katilir. */
+  onReconnect: (() => void) | null = null;
 
   constructor(private url: string, private token: string) {
     this.ac();
@@ -33,14 +44,22 @@ export class Connection {
       // İlk açılışta 0; yeniden bağlanmada kaçırılan mesajlar istenir.
       const son = lastMessageId();
       if (son > 0) this.send({ t: "sync", lastMessageId: son });
+      // Ilk acilista da calisir; niyeti olmayan oturum icin islemsizdir.
+      this.onReconnect?.();
     };
 
     ws.onmessage = (e: MessageEvent) => this.handle(JSON.parse(e.data as string) as ServerEvent);
 
     ws.onclose = () => {
-      // Socket kopunca mesh de olur: sinyal kanali yok. Store temizlenmezse
-      // arayuz hala seste gorunur ve kullanici konustugunu saniyor.
-      resetVoice();
+      // SIRA onemli: once oturum karar verir (store'dan katilim durumunu
+      // okur), sonra store temizlenir. Ters sirada oturum "zaten cikmis"
+      // sanip baglantilari acik birakiyordu.
+      //
+      // Ses P2P akar: sinyal kanalinin bir saniyeligine gitmesi konusmayi
+      // kesmez. Oturum baglantilari tutuyorsa store'u temizlemek yalan olur
+      // -- kullanici hala karsi tarafi duyuyor.
+      const tutuldu = this.onDisconnect?.() === true;
+      if (!tutuldu) resetVoice();
       store.durum = "kopuk";
       if (this.kapandi) return;
       setTimeout(() => this.ac(), this.backoff);
@@ -128,7 +147,13 @@ export class Connection {
   }
 
   send(event: ClientEvent): void {
-    this.ws?.send(JSON.stringify(event));
+    try {
+      this.ws?.send(JSON.stringify(event));
+    } catch {
+      // Kapanmakta olan socket InvalidStateError firlatir. Yeniden baglanma
+      // zaten kuyrukta; burada patlamak cagiran akisi (ornegin ayrilma
+      // temizligini) yarida birakirdi.
+    }
   }
 
   /** Kota koruması: 3 saniyede en fazla bir paket. */

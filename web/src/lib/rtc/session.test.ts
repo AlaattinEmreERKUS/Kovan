@@ -22,6 +22,7 @@ class SahtePC {
   async setLocalDescription() {}
   async setRemoteDescription() {}
   async addIceCandidate() {}
+  restartIce = vi.fn(() => { this.onnegotiationneeded?.(); });
   close() { this.kapandi = true; }
 }
 

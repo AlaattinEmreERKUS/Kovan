@@ -16,6 +16,13 @@ export interface SignalPayload {
   candidate?: RTCIceCandidateInit | null;
 }
 
+/**
+ * "failed" durumunda kac kez ICE yeniden baslatilir. Sinirsiz denemek,
+ * TURN'un gercekten ulasilamadigi durumda (kota bitti, ag engelli) sonsuz
+ * offer uretir. Basarili baglanti sayaci sifirlar.
+ */
+const ICE_DENEME_HAKKI = 3;
+
 export interface PeerOptions {
   /** isPolite(kendiId, karsiId) sonucu. */
   polite: boolean;
@@ -35,6 +42,7 @@ export class Peer {
   private ignoreOffer = false;
   private settingRemoteAnswerPending = false;
   private senders = new Map<TrackSlot, RTCRtpSender>();
+  private iceDenemesi = 0;
   /** Sender'lar hazir olmadan gelen track'ler; adopt() sonrasi uygulanir. */
   private pending = new Map<TrackSlot, MediaStreamTrack | null>();
 
@@ -60,8 +68,10 @@ export class Peer {
       // aciliyor: 8 transceiver, uzak track'ler 4-7 indekslerinde, SLOT_ORDER
       // eslemesi coker ve ontrack sessizce doner. Olculdu (Task 13 teshisi).
       //
-      // Renegotiation gerekmiyor: dort transceiver sabit, track degisimi
-      // replaceTrack ile yapiliyor ve o negotiation tetiklemiyor.
+      // Normal akista renegotiation olmaz: dort transceiver sabit, track
+      // degisimi replaceTrack ile yapiliyor ve o negotiation tetiklemiyor.
+      // TEK istisna restartIce(): koptuktan sonra yeni ICE kimlik bilgisiyle
+      // yeni bir offer uretmek icin bilerek buraya girer.
       if (this.o.polite) return;
       try {
         this.makingOffer = true;
@@ -83,7 +93,23 @@ export class Peer {
       o.onTrack(slot, ev.track);
     };
 
-    pc.onconnectionstatechange = () => o.onStateChange?.(pc.connectionState);
+    pc.onconnectionstatechange = () => {
+      const durum = pc.connectionState;
+      // Yol yeniden kuruldu; sonraki kopma icin hak tazelenir.
+      if (durum === "connected") this.iceDenemesi = 0;
+      // ICE yolu kalici olarak dustu. Kurtarma yoksa baglanti olu kalir ve
+      // iki taraf da birbirini seste gorurken sessizce bekler -- ag gidip
+      // gelen kullanicida gozlenen tam olarak buydu.
+      //
+      // YALNIZCA impolite taraf dener: restartIce() negotiationneeded
+      // tetikler ve o isleyici zaten polite tarafta erken doner. Iki taraf da
+      // denerse ayni anda offer uretilir ve cakisma buyur.
+      if (durum === "failed" && !this.o.polite && this.iceDenemesi < ICE_DENEME_HAKKI) {
+        this.iceDenemesi++;
+        pc.restartIce();
+      }
+      o.onStateChange?.(durum);
+    };
   }
 
   async handleSignal(data: SignalPayload): Promise<void> {
