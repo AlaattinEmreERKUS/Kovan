@@ -113,6 +113,7 @@ export class KovanServer implements DurableObject {
       userId: user.id,
       username: user.username,
       displayName: user.displayName,
+      joinedAt: Date.now(),
       inVoice: false,
       muted: false,
       deafened: false,
@@ -314,17 +315,54 @@ export class KovanServer implements DurableObject {
   }
 
   async webSocketClose(ws: WebSocket): Promise<void> {
-    const state = readState(ws);
-    // Bu kullanıcının başka açık socket'i yoksa offline sayılır.
-    if (socketsOf(this.ctx, state.userId).filter((s) => s !== ws).length === 0) {
-      broadcast(this.ctx, { t: "presence.update", userId: state.userId, online: false }, ws);
+    this.birak(ws);
+  }
+
+  /**
+   * ANI KOPMA. Internet giderse TCP FIN gelmez ve runtime webSocketClose
+   * DEGIL bunu cagirir. Isleyici olmadigi surece hicbir temizlik yapilmiyor,
+   * hicbir yayin gitmiyordu: kopan kisi digerlerinin ses listesinde hayalet
+   * olarak kaliyor, geri baglandiginda mesh onu "zaten var" sayip yeni
+   * baglanti kurmuyor ve kimse onu duyamiyordu.
+   */
+  async webSocketError(ws: WebSocket): Promise<void> {
+    this.birak(ws);
+    // Socket'i acikca kapat: aksi halde getWebSockets() icinde durmaya devam
+    // eder ve sonradan turetilen her liste (hello, voiceFull) onu sayar.
+    try {
+      ws.close(1011, "baglanti hatasi");
+    } catch {
+      // Zaten olu socket. Kapatmak sadece listeyi temizlemek icindi.
     }
-    // Kapanan socket getWebSockets() icinde bir sure daha gorunebilir. Listeyi
+  }
+
+  /**
+   * Bir socket'in dusmesi. Hem temiz kapanis hem ani kopma buraya gelir.
+   * Iki kez cagrilmasi zararsizdir: inVoice ilk turda dusurulur, ikinci
+   * turda ses yayini tekrarlanmaz.
+   */
+  private birak(ws: WebSocket): void {
+    const state = readState(ws);
+    // Dusen socket getWebSockets() icinde bir sure daha gorunebilir. Listeyi
     // broadcastVoice() ile turetirsek ayrilan kisi listede kalir ve digerleri
     // hic gelmeyecek bir offer bekler. Bu yuzden onu ACIKCA eliyoruz.
+    const kalan = this.ctx.getWebSockets().filter((s) => s !== ws);
+
+    // Bu kullanıcının başka açık socket'i yoksa offline sayılır.
+    if (!kalan.some((s) => readState(s).userId === state.userId)) {
+      broadcast(this.ctx, { t: "presence.update", userId: state.userId, online: false }, ws);
+    }
     if (state.inVoice) {
-      const kalan = this.ctx.getWebSockets().filter((s) => s !== ws).map(readState);
-      broadcast(this.ctx, { t: "voice.members", members: voiceMembers(kalan) }, ws);
+      // Yayin ONCE: `kalan` zaten bu socket'i disliyor, yani asagidaki
+      // attachment yazimi patlasa bile digerleri dogru listeyi alir.
+      broadcast(this.ctx, { t: "voice.members", members: voiceMembers(kalan.map(readState)) }, ws);
+      try {
+        // Bayrak attachment'ta kalirsa, socket kapanana kadar SONRADAN
+        // turetilen her liste (hello, voiceFull) kisiyi seste sayar.
+        writeState(ws, { inVoice: false });
+      } catch {
+        // Arizali socket'e yazilamadi. Kapatma zaten webSocketError'da.
+      }
     }
   }
 

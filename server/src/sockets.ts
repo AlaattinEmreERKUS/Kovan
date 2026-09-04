@@ -4,6 +4,13 @@ export interface SocketState {
   userId: string;
   username: string;
   displayName: string;
+  /**
+   * Socket'in acilis zamani. Ayni kullanicinin iki kaydi oldugunda (olu
+   * baglanti henuz tespit edilmemisken kisi geri baglandi) hangisinin
+   * guncel oldugunu AYIRT EDEN tek bilgi budur; getWebSockets() sirasi
+   * hibernation sonrasi korunmaz.
+   */
+  joinedAt: number;
   inVoice: boolean;
   muted: boolean;
   deafened: boolean;

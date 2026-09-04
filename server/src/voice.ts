@@ -13,23 +13,38 @@ const FLAG_KEYS = ["muted", "deafened", "camera", "screen", "screenAudio"] as co
 
 /**
  * Ses kanalindaki kullanicilar. Kullanici basina TEK kayit doner: ayni kisi
- * iki sekme acmis olabilir ve liste onu ikizlememeli. Ilk gorulen socket
- * kazanir.
+ * iki sekme acmis olabilir ve liste onu ikizlememeli.
+ *
+ * Seste olanlar arasinda EN YENI socket kazanir. Onceden ilk gorulen
+ * kazaniyordu: ani kopmada olu socket bir sure listede kaldigi icin geri
+ * baglanan kisi hep olu kaydiyla temsil ediliyor, yeni sekmesinden gonderdigi
+ * mute/kamera bayraklari hicbir zaman gorunmuyordu.
+ *
+ * Yenilik kurali YALNIZCA seste olanlara uygulanir: sesten bagimsiz acilmis
+ * yeni bir sekme, kisiyi seste olan eski sekmesiyle birlikte listeden
+ * dusurmemeli.
  */
 export function voiceMembers(states: SocketState[]): VoiceMember[] {
-  const byUser = new Map<string, VoiceMember>();
+  const byUser = new Map<string, { at: number; uye: VoiceMember }>();
   for (const s of states) {
-    if (!s.inVoice || byUser.has(s.userId)) continue;
+    if (!s.inVoice) continue;
+    const at = s.joinedAt ?? 0;
+    const mevcut = byUser.get(s.userId);
+    // >= : ayni milisaniyede acilmis iki socket'te sonraki kazanir.
+    if (mevcut && at < mevcut.at) continue;
     byUser.set(s.userId, {
-      userId: s.userId,
-      muted: s.muted,
-      deafened: s.deafened,
-      camera: s.camera,
-      screen: s.screen,
-      screenAudio: s.screenAudio,
+      at,
+      uye: {
+        userId: s.userId,
+        muted: s.muted,
+        deafened: s.deafened,
+        camera: s.camera,
+        screen: s.screen,
+        screenAudio: s.screenAudio,
+      },
     });
   }
-  return [...byUser.values()];
+  return [...byUser.values()].map((v) => v.uye);
 }
 
 /**

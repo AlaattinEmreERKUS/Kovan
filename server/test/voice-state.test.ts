@@ -4,7 +4,7 @@ import type { SocketState } from "../src/sockets";
 
 function durum(userId: string, patch: Partial<SocketState> = {}): SocketState {
   return {
-    userId, username: userId, displayName: userId,
+    userId, username: userId, displayName: userId, joinedAt: 0,
     inVoice: false, muted: false, deafened: false,
     camera: false, screen: false, screenAudio: false,
     ...patch,
@@ -17,13 +17,15 @@ describe("voiceMembers", () => {
     expect(liste.map((m) => m.userId)).toEqual(["a"]);
   });
 
+  // Ikizleme olmamali; catisan bayraklarda EN YENI sekme kazanir (kopma
+  // sonrasi geri baglanan kisi olu kaydiyla temsil edilmesin diye).
   it("ayni kullanicinin iki sekmesini tek kayda indirir", () => {
     const liste = voiceMembers([
-      durum("a", { inVoice: true, muted: true }),
-      durum("a", { inVoice: true }),
+      durum("a", { inVoice: true, muted: true, joinedAt: 1 }),
+      durum("a", { inVoice: true, joinedAt: 2 }),
     ]);
     expect(liste).toHaveLength(1);
-    expect(liste[0].muted).toBe(true);
+    expect(liste[0].muted).toBe(false);
   });
 
   it("bayraklari tasir", () => {
