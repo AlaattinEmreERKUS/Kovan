@@ -15,6 +15,7 @@
   import RemoteAudio from "$lib/components/RemoteAudio.svelte";
   import VoiceStage from "$lib/components/VoiceStage.svelte";
   import ShareBanner from "$lib/components/ShareBanner.svelte";
+  import IndirSeridi from "$lib/components/IndirSeridi.svelte";
   import Icon from "$lib/components/Icon.svelte";
 
   // $state sart: oturumu kuran efekt bunun atanmasini beklemek zorunda.
@@ -170,6 +171,12 @@
     onToggleScreen={() => void ekranDugmesi()}
   />
   <main>
+    <!--
+      Serit main'in icinde: kabuk 100vh'lik bir satir izgarasi, ustune bir
+      seyler eklemek gecen oturumdaki tasma hatasini geri getirirdi.
+    -->
+    <IndirSeridi />
+
     <header class="ust">
       {#if aktifSekme === "ses"}
         <Icon ad="kanal-ses" boyut={15} /> sohbet
