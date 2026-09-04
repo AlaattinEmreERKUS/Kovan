@@ -7,6 +7,11 @@ use std::sync::Mutex;
 #[cfg(desktop)]
 use tauri::Emitter;
 use tauri::Manager;
+use tauri::WindowEvent;
+#[cfg(desktop)]
+use tauri::menu::{Menu, MenuItem};
+#[cfg(desktop)]
+use tauri::tray::TrayIconBuilder;
 #[cfg(desktop)]
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 
@@ -89,9 +94,43 @@ fn kisayollari_ayarla(
     Ok(sonuclar)
 }
 
+/// Tepsi menusundeki mikrofon ogesi. Rust durumu TUTMAZ (K6): sayfa
+/// degisince bildirir, burada yalniz metin guncellenir.
+#[cfg(desktop)]
+struct TepsiOgeleri(Mutex<Option<MenuItem<tauri::Wry>>>);
+
+#[tauri::command]
+fn mikrofon_etiketi(app: tauri::AppHandle, muted: bool) -> Result<(), String> {
+    #[cfg(desktop)]
+    {
+        let ogeler = app.state::<TepsiOgeleri>();
+        let kilit = ogeler.0.lock().map_err(|e| e.to_string())?;
+        if let Some(oge) = kilit.as_ref() {
+            let metin = if muted { "Mikrofonu ac" } else { "Mikrofonu kapat" };
+            oge.set_text(metin).map_err(|e| e.to_string())?;
+        }
+    }
+    #[cfg(not(desktop))]
+    let _ = (&app, muted);
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default().manage(KisayolHaritasi::default());
+
+    // Tek ornek kilidi ILK eklenti olmali (Tauri'nin sarti). Iki pencere
+    // iki WebSocket ve iki mikrofon demek olurdu.
+    #[cfg(desktop)]
+    let builder = builder
+        .manage(TepsiOgeleri(Mutex::new(None)))
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(p) = app.get_webview_window("main") {
+                let _ = p.show();
+                let _ = p.unminimize();
+                let _ = p.set_focus();
+            }
+        }));
 
     #[cfg(desktop)]
     let builder = builder.plugin(
@@ -123,9 +162,55 @@ pub fn run() {
                 w.open_devtools();
             }
             let _ = app;
+
+            #[cfg(desktop)]
+            {
+                let goster = MenuItem::with_id(app, "goster", "Goster", true, None::<&str>)?;
+                let mik = MenuItem::with_id(app, "mik", "Mikrofonu kapat", true, None::<&str>)?;
+                let cik = MenuItem::with_id(app, "cik", "Cik", true, None::<&str>)?;
+                let menu = Menu::with_items(app, &[&goster, &mik, &cik])?;
+
+                app.state::<TepsiOgeleri>()
+                    .0
+                    .lock()
+                    .expect("tepsi kilidi")
+                    .replace(mik.clone());
+
+                TrayIconBuilder::new()
+                    .icon(app.default_window_icon().expect("pencere ikonu").clone())
+                    .menu(&menu)
+                    .show_menu_on_left_click(false)
+                    .on_menu_event(|app, event| match event.id().as_ref() {
+                        "goster" => {
+                            if let Some(p) = app.get_webview_window("main") {
+                                let _ = p.show();
+                                let _ = p.set_focus();
+                            }
+                        }
+                        // Rust mute'u KENDI cevirmez; sayfaya soyler, karar orada.
+                        "mik" => {
+                            let _ = app.emit(
+                                "kisayol",
+                                KisayolOlayi { ad: "mik".into(), durum: "Pressed".into() },
+                            );
+                        }
+                        "cik" => app.exit(0),
+                        _ => {}
+                    })
+                    .build(app)?;
+            }
+
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![kisayollari_ayarla])
+        .on_window_event(|pencere, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                // Kapatma SONLANDIRMAZ (K4): seste kalmak beklenen davranis.
+                // Cikis yalniz tepsi menusunden.
+                api.prevent_close();
+                let _ = pencere.hide();
+            }
+        })
+        .invoke_handler(tauri::generate_handler![kisayollari_ayarla, mikrofon_etiketi])
         .run(tauri::generate_context!())
         .expect("Kovan baslatilamadi");
 }

@@ -91,6 +91,11 @@
           kisayolUygula(o, oturum!, {
             joined: voice.joined, muted: voice.muted, deafened: voice.deafened,
           }));
+        // Tepsi etiketi voice.muted ile senkron kalsin (R11): kisayolla ya da
+        // arayuzden cevrildiginde menude yazan sey de degissin.
+        $effect(() => {
+          void k.invoke("mikrofon_etiketi", { muted: voice.muted }).catch(() => {});
+        });
       }
     }
     // Uretimde de duran TESHIS ciktisi. Canlida gorulen ama yerelde
