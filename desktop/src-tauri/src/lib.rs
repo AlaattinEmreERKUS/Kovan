@@ -2,11 +2,13 @@
 // kisayolu kaydeder ve olayi sayfaya yayar. Mute/deafen kararinin tek
 // sahibi web tarafindaki `voice` store'udur.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 
 #[cfg(desktop)]
 use tauri::Emitter;
 use tauri::Manager;
+use tauri::webview::PageLoadEvent;
 use tauri::WindowEvent;
 #[cfg(desktop)]
 use tauri::menu::{Menu, MenuItem};
@@ -115,6 +117,21 @@ fn mikrofon_etiketi(app: tauri::AppHandle, muted: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// Uzak sayfa bir kez yuklendi mi. Ag yokken WebView2'nin kendi ingilizce
+/// hata sayfasinda kalinmasin diye (R10) sureyi bu bayrak olcuyor.
+static SAYFA_YUKLENDI: AtomicBool = AtomicBool::new(false);
+
+/// Uzak sayfanin acilmasi icin tanidigimiz sure. Yavas baglantida erken
+/// vazgecip "baglanilamadi" demek, gec vazgecmekten daha kotu.
+const YUKLEME_SURESI: std::time::Duration = std::time::Duration::from_secs(20);
+
+/// Yerel hata sayfasinin adresi. Windows'ta ozel semalar
+/// `http://<sema>.localhost/` bicimine ceviriliyor.
+#[cfg(windows)]
+const HATA_ADRESI: &str = "http://kovan.localhost/hata";
+#[cfg(not(windows))]
+const HATA_ADRESI: &str = "kovan://localhost/hata";
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default().manage(KisayolHaritasi::default());
@@ -154,6 +171,19 @@ pub fn run() {
     );
 
     builder
+        // Hata sayfasi uygulamanin icinde gomulu duruyor: ag yokken disaridan
+        // bir sey cekmek zaten mumkun degil.
+        .register_uri_scheme_protocol("kovan", |_ctx, _istek| {
+            tauri::http::Response::builder()
+                .header("Content-Type", "text/html; charset=utf-8")
+                .body(include_str!("hata.html").as_bytes().to_vec())
+                .expect("hata sayfasi")
+        })
+        .on_page_load(|_pencere, yuk| {
+            if matches!(yuk.event(), PageLoadEvent::Finished) {
+                SAYFA_YUKLENDI.store(true, Ordering::Relaxed);
+            }
+        })
         .setup(|app| {
             // Uzak sayfada hata ayiklamanin tek yolu konsol; elle aranmasin.
             // Yalniz hata ayiklama derlemesinde, surum derlemesinde blok yok.
@@ -161,7 +191,21 @@ pub fn run() {
             if let Some(w) = app.get_webview_window("main") {
                 w.open_devtools();
             }
-            let _ = app;
+            // Uzak sayfa acilmadiysa kendi hata sayfamiza gec. WebView2 kendi
+            // sayfasini gosterdiginde de Finished tetiklenebiliyor; o durumda
+            // bu yakalamaz, bilinen sinir.
+            let tutamac = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(YUKLEME_SURESI);
+                if SAYFA_YUKLENDI.load(Ordering::Relaxed) {
+                    return;
+                }
+                if let Some(p) = tutamac.get_webview_window("main") {
+                    if let Ok(adres) = HATA_ADRESI.parse() {
+                        let _ = p.navigate(adres);
+                    }
+                }
+            });
 
             #[cfg(desktop)]
             {

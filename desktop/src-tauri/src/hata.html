@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Kovan</title>
+    <style>
+      /* Yerel sayfa: uygulamanin token'larina erisemiyor, renkler burada
+         elle yaziliyor. Kovan'in bal + sicak siyah paleti. */
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: flex; align-items: center; justify-content: center;
+        background: #17130f; color: #e8e2d9;
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      }
+      .kutu { max-width: 380px; padding: 24px; text-align: center; }
+      h1 { margin: 0 0 10px; font-size: 18px; font-weight: 600; }
+      p { margin: 0 0 18px; font-size: 13px; line-height: 1.5; color: #a89f93; }
+      button {
+        border: none; border-radius: 6px; padding: 9px 18px;
+        background: #e8a317; color: #17130f;
+        font-size: 13px; font-weight: 600; cursor: pointer;
+      }
+      button:hover { background: #f2b431; }
+    </style>
+  </head>
+  <body>
+    <div class="kutu">
+      <h1>Kovan'a bağlanılamadı</h1>
+      <p>İnternet bağlantını kontrol edip tekrar dene.</p>
+      <button onclick="location.replace('https://kovan-web.pages.dev')">
+        Yeniden dene
+      </button>
+    </div>
+  </body>
+</html>
