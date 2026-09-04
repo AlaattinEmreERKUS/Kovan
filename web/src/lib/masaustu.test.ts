@@ -1,5 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
-import { isTauri, kisayolDinle, type KisayolOlayi, type MasaustuKoprusu } from "./masaustu";
+import {
+  isTauri,
+  kisayolDinle,
+  kisayolUygula,
+  type KisayolOlayi,
+  type MasaustuKoprusu,
+} from "./masaustu";
 
 /** Gercek kopru yerine gecen sahte: listen'e verilen geri cagrimi saklar. */
 function sahteKopru() {
@@ -57,5 +63,48 @@ describe("kisayolDinle", () => {
     const coz = await kisayolDinle(kopru, () => {});
     coz();
     expect(cozuldu).toHaveBeenCalled();
+  });
+});
+
+describe("kisayolUygula", () => {
+  function sahteOturum() {
+    const izler: string[] = [];
+    return {
+      izler,
+      oturum: {
+        setPttBasili: (b: boolean) => izler.push(`ptt:${b}`),
+        setMuted: (b: boolean) => izler.push(`mute:${b}`),
+        setDeafened: (b: boolean) => izler.push(`deafen:${b}`),
+      },
+    };
+  }
+
+  it("ses kanalinda degilken hicbir sey yapmaz", () => {
+    const { oturum, izler } = sahteOturum();
+    kisayolUygula(
+      { ad: "ptt", durum: "Pressed" },
+      oturum,
+      { joined: false, muted: false, deafened: false },
+    );
+    expect(izler).toEqual([]);
+  });
+
+  it("ptt bas ve birak isleyiciye tasinir", () => {
+    const { oturum, izler } = sahteOturum();
+    const d = { joined: true, muted: false, deafened: false };
+    kisayolUygula({ ad: "ptt", durum: "Pressed" }, oturum, d);
+    kisayolUygula({ ad: "ptt", durum: "Released" }, oturum, d);
+    expect(izler).toEqual(["ptt:true", "ptt:false"]);
+  });
+
+  it("mik ve kulaklik YALNIZ Pressed'de cevirir", () => {
+    // Released de islenseydi tek basis iki kez cevirirdi.
+    const { oturum, izler } = sahteOturum();
+    const d = { joined: true, muted: false, deafened: false };
+    kisayolUygula({ ad: "mik", durum: "Pressed" }, oturum, d);
+    kisayolUygula({ ad: "mik", durum: "Released" }, oturum, d);
+    kisayolUygula({ ad: "kulaklik", durum: "Pressed" }, oturum, d);
+    kisayolUygula({ ad: "kulaklik", durum: "Released" }, oturum, d);
+    expect(izler).toEqual(["mute:true", "deafen:true"]);
   });
 });

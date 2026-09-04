@@ -72,3 +72,39 @@ export async function kisayolDinle(
     fn({ ad: payload.ad, durum: payload.durum });
   });
 }
+
+/** Kisayolun dokunabildigi oturum yuzeyi. Testte sahtelenebilsin diye dar. */
+export interface KisayolHedefi {
+  setPttBasili(basili: boolean): void;
+  setMuted(muted: boolean): void;
+  setDeafened(deafened: boolean): void;
+}
+
+export interface KisayolBaglami {
+  joined: boolean;
+  muted: boolean;
+  deafened: boolean;
+}
+
+/**
+ * Olayi eyleme cevirir. Saf: DOM'a ve store'a dokunmaz, cagiran baglami verir.
+ *
+ * Ses kanalinda degilken hicbiri islemez -- kanala girmeden mikrofon
+ * cevirmek gorunur sonucu olmayan bir durum degisikligi yaratirdi.
+ */
+export function kisayolUygula(
+  o: KisayolOlayi,
+  hedef: KisayolHedefi,
+  baglam: KisayolBaglami,
+): void {
+  if (!baglam.joined) return;
+  if (o.ad === "ptt") {
+    hedef.setPttBasili(o.durum === "Pressed");
+    return;
+  }
+  // Toggle'lar yalniz Pressed isler; Released de islenseydi tek basis
+  // iki kez cevirirdi.
+  if (o.durum !== "Pressed") return;
+  if (o.ad === "mik") hedef.setMuted(!baglam.muted);
+  if (o.ad === "kulaklik") hedef.setDeafened(!baglam.deafened);
+}

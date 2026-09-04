@@ -6,7 +6,8 @@
   import { store } from "$lib/store.svelte";
   import { voice } from "$lib/voice.svelte";
   import { VoiceSession } from "$lib/rtc/session";
-  import { isTauri, kopru, kisayolDinle } from "$lib/masaustu";
+  import { isTauri, kopru, kisayolDinle, kisayolUygula } from "$lib/masaustu";
+  import { kisayollariOku, type KayitSonucu } from "$lib/kisayollar";
   import ChannelRail from "$lib/components/ChannelRail.svelte";
   import MessageList from "$lib/components/MessageList.svelte";
   import Composer from "$lib/components/Composer.svelte";
@@ -21,6 +22,9 @@
   // $state sart: oturum atandiginda VoiceStage'in mixer prop'u guncellenmeli.
   let oturum = $state<VoiceSession | null>(null);
   let aktifSekme = $state<"metin" | "ses">("metin");
+  // Rust hangi kisayolu kaydedebildi. Bos dizi = masaustu degiliz ya da
+  // kayit hic denenmedi; ayarlar paneli yalniz `kayitli:false` olani uyarir.
+  let kisayolSonuclari = $state<KayitSonucu[]>([]);
 
   async function katil() {
     await oturum?.join();
@@ -73,14 +77,21 @@
       (window as unknown as { __kovan?: unknown }).__kovan = { oturum, voice };
     }
 
-    // GECICI — S6 Gorev 2 olcum kapisi (R7): Tauri uzak sayfaya IPC
-    // koprusunu enjekte ediyor mu? Yalnizca RAPOR eder, hicbir seye
-    // dokunmaz. Gorev 8'de kalici hale gelecek ve kisayollar oturum
-    // metotlarina baglanacak. Tarayicida bu blok hic calismaz.
+    // Masaustunde global kisayollar. Tarayicida bu blok hic calismaz.
     if (isTauri()) {
       const k = kopru();
-      console.log("[olcum] kopru:", k !== null);
-      if (k) void kisayolDinle(k, (o) => console.log("[olcum] kisayol", o));
+      if (k) {
+        void k
+          .invoke<KayitSonucu[]>("kisayollari_ayarla", { kisayollar: kisayollariOku() })
+          .then((s) => { kisayolSonuclari = s; })
+          // Kayit istegi patlarsa uygulama calismaya devam eder; kisayol
+          // olmadan mikrofon dugmesi hala var.
+          .catch(() => { kisayolSonuclari = []; });
+        void kisayolDinle(k, (o) =>
+          kisayolUygula(o, oturum!, {
+            joined: voice.joined, muted: voice.muted, deafened: voice.deafened,
+          }));
+      }
     }
     // Uretimde de duran TESHIS ciktisi. Canlida gorulen ama yerelde
     // uretilemeyen hatalarin (kamera kayboluyor, ekran gorunmuyor) tek
@@ -178,6 +189,7 @@
     {#if aktifSekme === "ses" && voice.joined && store.me}
       <VoiceStage
         selfId={store.me.id}
+        {kisayolSonuclari}
         onToggleMute={() => oturum?.setMuted(!voice.muted)}
         onToggleDeafen={() => oturum?.setDeafened(!voice.deafened)}
         onToggleCamera={() => void oturum?.setCamera(!voice.camera)}

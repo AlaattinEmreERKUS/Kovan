@@ -4,13 +4,15 @@
   import { sahneDuzeni } from "$lib/stage";
   import { izgaraOlcusu } from "$lib/izgara";
   import type { SesAyarlari } from "$lib/ses-ayarlari";
+  import type { KayitSonucu } from "$lib/kisayollar";
   import { gorunumOku, gorunumYaz, type GorunumModu } from "$lib/gorunum";
   import StageTile from "./StageTile.svelte";
   import VideoTile from "./VideoTile.svelte";
   import VoiceControls from "./VoiceControls.svelte";
 
-  let { selfId, onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen, onSesAyari, onLeave }: {
+  let { selfId, kisayolSonuclari, onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen, onSesAyari, onLeave }: {
     selfId: string;
+    kisayolSonuclari: KayitSonucu[];
     onToggleMute: () => void;
     onToggleDeafen: () => void;
     onToggleCamera: () => void;
@@ -112,6 +114,7 @@
 
   <VoiceControls
     {mod}
+    {kisayolSonuclari}
     {onToggleMute}
     {onToggleDeafen}
     {onToggleCamera}

@@ -1,12 +1,41 @@
 <script lang="ts">
   import { voice } from "$lib/voice.svelte";
   import { ESIK_MAKS, type SesAyarlari } from "$lib/ses-ayarlari";
+  import type { GirisModu } from "$lib/rtc/kapi";
+  import { isTauri, kopru, KISAYOL_ADLARI, type KisayolAdi } from "$lib/masaustu";
+  import {
+    KISAYOL_ETIKETI,
+    kisayollariOku,
+    kisayollariYaz,
+    type KayitSonucu,
+  } from "$lib/kisayollar";
   import Icon from "./Icon.svelte";
 
-  let { onKapat, onDegis }: {
+  let { kisayolSonuclari, onKapat, onDegis }: {
+    kisayolSonuclari: KayitSonucu[];
     onKapat: () => void;
     onDegis: (a: SesAyarlari) => void;
   } = $props();
+
+  let kisayollar = $state(kisayollariOku());
+  /**
+   * Kullanici tusu degistirdikten sonraki kayit sonucu. Prop tek yonlu:
+   * sayfa yalnizca ACILIS kaydinin sonucunu verir, burada yapilan yeni
+   * kayidi geri yazamaz. null = henuz degistirilmedi, prop gecerli.
+   */
+  let yerelSonuclar = $state<KayitSonucu[] | null>(null);
+  const sonuclar = $derived(yerelSonuclar ?? kisayolSonuclari);
+
+  function kisayolDegis(ad: KisayolAdi, tus: string) {
+    kisayollar = { ...kisayollar, [ad]: tus };
+    kisayollariYaz(kisayollar);
+    const k = kopru();
+    if (!k) return;
+    void k
+      .invoke<KayitSonucu[]>("kisayollari_ayarla", { kisayollar })
+      .then((s) => { yerelSonuclar = s; })
+      .catch(() => { yerelSonuclar = []; });
+  }
 
   const a = $derived(voice.sesAyarlari);
   /** Cubuk ve esik ayni olcekte cizilir; kullanici ikisini karsilastirir. */
@@ -66,6 +95,38 @@
     Otomatik seviye
   </label>
 
+  {#if isTauri()}
+    <div class="ayirac"></div>
+
+    <label class="alan" for="mod">Giriş modu</label>
+    <select
+      id="mod"
+      value={a.girisModu}
+      onchange={(e) => degis({ girisModu: e.currentTarget.value as GirisModu })}
+    >
+      <option value="ses-etkinligi">Ses etkinliği</option>
+      <option value="bas-konus">Bas-konuş</option>
+    </select>
+
+    {#each KISAYOL_ADLARI as ad (ad)}
+      {@const sonuc = sonuclar.find((s) => s.ad === ad)}
+      <label class="satir kisayol">
+        <span>{KISAYOL_ETIKETI[ad]}</span>
+        <input
+          type="text"
+          value={kisayollar[ad]}
+          aria-label={`${KISAYOL_ETIKETI[ad]} kısayolu`}
+          onchange={(e) => kisayolDegis(ad, e.currentTarget.value)}
+        />
+      </label>
+      {#if sonuc && !sonuc.kayitli}
+        <p class="uyari" role="status">
+          Bu kısayol başka bir uygulamada kayıtlı, çalışmayacak.
+        </p>
+      {/if}
+    {/each}
+  {/if}
+
   <p class="not"><Icon ad="mik" boyut={12} /> Ayarlar yalnız sende kalır, karşı tarafa gitmez.</p>
 </div>
 
@@ -99,6 +160,20 @@
   }
 
   .satir { display: flex; align-items: center; gap: 8px; color: var(--metin-2); }
+  .ayirac { height: 1px; background: var(--cizgi); margin: 2px 0; }
+  select {
+    background: var(--zemin-0); color: var(--metin-1);
+    border: 1px solid var(--cizgi); border-radius: 4px; padding: 4px 6px;
+    font-size: 12px;
+  }
+  .kisayol { justify-content: space-between; }
+  .kisayol input {
+    width: 84px; text-align: center;
+    background: var(--zemin-0); color: var(--metin-1);
+    border: 1px solid var(--cizgi); border-radius: 4px; padding: 3px 4px;
+    font-size: 12px;
+  }
+  .uyari { margin: 0; color: var(--tehlike); font-size: 11px; }
   .not {
     display: flex; align-items: center; gap: 5px; margin: 2px 0 0;
     color: var(--metin-3); font-size: 11px;

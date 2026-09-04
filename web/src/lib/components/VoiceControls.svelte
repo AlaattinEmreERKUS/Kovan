@@ -4,11 +4,13 @@
   import Icon from "./Icon.svelte";
   import SesAyarlariPanel from "./SesAyarlari.svelte";
   import type { SesAyarlari } from "$lib/ses-ayarlari";
+  import type { KayitSonucu } from "$lib/kisayollar";
 
   let ayarlarAcik = $state(false);
 
-  let { mod, onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen, onToggleGorunum, onSesAyari, onLeave }: {
+  let { mod, kisayolSonuclari, onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen, onToggleGorunum, onSesAyari, onLeave }: {
     mod: GorunumModu;
+    kisayolSonuclari: KayitSonucu[];
     onToggleMute: () => void;
     onToggleDeafen: () => void;
     onToggleCamera: () => void;
@@ -59,7 +61,7 @@
         onclick={() => (ayarlarAcik = !ayarlarAcik)}
       ><Icon ad="ayar" /></button>
       {#if ayarlarAcik}
-        <SesAyarlariPanel onKapat={() => (ayarlarAcik = false)} onDegis={onSesAyari} />
+        <SesAyarlariPanel {kisayolSonuclari} onKapat={() => (ayarlarAcik = false)} onDegis={onSesAyari} />
       {/if}
     </div>
 

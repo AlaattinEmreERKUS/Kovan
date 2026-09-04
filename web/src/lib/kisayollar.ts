@@ -70,3 +70,10 @@ export function kisayollariYaz(k: Kisayollar, depo: DepoBenzeri | null = varsayi
     // Kota dolu ya da yazma engelli: tercih kalici olmaz, kisayol yine calisir.
   }
 }
+
+/** Ayarlar panelinde gorunen adlar. */
+export const KISAYOL_ETIKETI: Record<KisayolAdi, string> = {
+  ptt: "Bas-konuş",
+  mik: "Mikrofon aç/kapa",
+  kulaklik: "Kulaklık aç/kapa",
+};
