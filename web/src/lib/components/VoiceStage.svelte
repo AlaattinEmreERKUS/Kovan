@@ -10,14 +10,26 @@
   import VideoTile from "./VideoTile.svelte";
   import VoiceControls from "./VoiceControls.svelte";
 
-  let { selfId, kisayolSonuclari, onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen, onSesAyari, onLeave }: {
+  let {
+    selfId, kisayolSonuclari, girisSecili, cikisSecili,
+    onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen, onSesAyari,
+    onGirisCihazi, onCikisCihazi, onBip, onGeriDinlemeBasla, onGeriDinlemeBitir,
+    onLeave,
+  }: {
     selfId: string;
     kisayolSonuclari: KayitSonucu[];
+    girisSecili: string | null;
+    cikisSecili: string | null;
     onToggleMute: () => void;
     onToggleDeafen: () => void;
     onToggleCamera: () => void;
     onToggleScreen: () => void;
     onSesAyari: (a: SesAyarlari) => void;
+    onGirisCihazi: (id: string | null) => void;
+    onCikisCihazi: (id: string | null) => void;
+    onBip: () => void;
+    onGeriDinlemeBasla: () => void;
+    onGeriDinlemeBitir: () => void;
     onLeave: () => void;
   } = $props();
 
@@ -115,13 +127,20 @@
   <VoiceControls
     {mod}
     {kisayolSonuclari}
+    {girisSecili}
+    {cikisSecili}
     {onToggleMute}
     {onToggleDeafen}
     {onToggleCamera}
     {onToggleScreen}
-    onToggleGorunum={gorunumDegistir}
     {onSesAyari}
+    {onGirisCihazi}
+    {onCikisCihazi}
+    {onBip}
+    {onGeriDinlemeBasla}
+    {onGeriDinlemeBitir}
     {onLeave}
+    onToggleGorunum={gorunumDegistir}
   />
 </section>
 

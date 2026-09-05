@@ -215,11 +215,21 @@
       <VoiceStage
         selfId={store.me.id}
         {kisayolSonuclari}
+        girisSecili={oturum?.girisTercihi() ?? null}
+        cikisSecili={oturum?.cikisTercihi() ?? null}
         onToggleMute={() => oturum?.setMuted(!voice.muted)}
         onToggleDeafen={() => oturum?.setDeafened(!voice.deafened)}
         onToggleCamera={() => void oturum?.setCamera(!voice.camera)}
         onToggleScreen={() => void ekranDugmesi()}
         onSesAyari={(a) => void oturum?.setSesAyarlari(a)}
+        onGirisCihazi={(id) => void oturum?.setGirisCihazi(id)}
+        onCikisCihazi={(id) => void oturum?.setCikisCihazi(id)}
+        onBip={() => oturum?.testci()?.bip()}
+        onGeriDinlemeBasla={() => {
+          const t = oturum?.gidenMikPublic();
+          if (t) oturum?.testci()?.geriDinlemeBasla(t);
+        }}
+        onGeriDinlemeBitir={() => oturum?.testci()?.geriDinlemeBitir()}
         onLeave={ayril}
       />
     {:else}

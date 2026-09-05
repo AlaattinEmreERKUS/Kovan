@@ -10,12 +10,53 @@
     type KayitSonucu,
   } from "$lib/kisayollar";
   import Icon from "./Icon.svelte";
+  import {
+    cihazlariListele, cikisDesteginVar, izinAl, tarayiciCihazDeps, type Cihaz,
+  } from "$lib/rtc/cihazlar";
 
-  let { kisayolSonuclari, onKapat, onDegis }: {
+  let {
+    kisayolSonuclari, girisSecili, cikisSecili, onKapat, onDegis,
+    onGirisCihazi, onCikisCihazi, onBip, onGeriDinlemeBasla, onGeriDinlemeBitir,
+  }: {
     kisayolSonuclari: KayitSonucu[];
+    girisSecili: string | null;
+    cikisSecili: string | null;
     onKapat: () => void;
     onDegis: (a: SesAyarlari) => void;
+    onGirisCihazi: (id: string | null) => void;
+    onCikisCihazi: (id: string | null) => void;
+    onBip: () => void;
+    onGeriDinlemeBasla: () => void;
+    onGeriDinlemeBitir: () => void;
   } = $props();
+
+  let girisler = $state<Cihaz[]>([]);
+  let cikislar = $state<Cihaz[]>([]);
+  const cikisDestekli = cikisDesteginVar();
+
+  /**
+   * enumerateDevices izin verilene kadar BOS etiket doner; once izin alinir,
+   * yoksa kullanici "Adsiz cihaz" listesi gorurdu.
+   */
+  async function cihazlariTazele() {
+    const deps = tarayiciCihazDeps();
+    await izinAl(deps);
+    ({ girisler, cikislar } = await cihazlariListele(deps));
+  }
+
+  $effect(() => {
+    void cihazlariTazele();
+    const md = navigator.mediaDevices;
+    const f = () => void cihazlariTazele();
+    md?.addEventListener("devicechange", f);
+    return () => {
+      md?.removeEventListener("devicechange", f);
+      onGeriDinlemeBitir();   // panel kapanirken geri dinleme acik kalmasin
+    };
+  });
+
+  /** `<select>` degeri metindir; bos secenek "varsayilan" demektir. */
+  const deger = (v: string) => (v === "" ? null : v);
 
   let kisayollar = $state(kisayollariOku());
   /**
@@ -53,6 +94,53 @@
     <span>Ses ayarları</span>
     <button class="kapat" aria-label="Ses ayarlarını kapat" onclick={onKapat}>×</button>
   </div>
+
+  <label class="alan" for="giris-cihazi">
+    Mikrofon
+    {#if voice.mikYok}<span class="uyari">yok</span>{/if}
+  </label>
+  <select
+    id="giris-cihazi"
+    value={girisSecili ?? ""}
+    onchange={(e) => onGirisCihazi(deger(e.currentTarget.value))}
+  >
+    <option value="">Varsayılan</option>
+    {#each girisler as c (c.id)}
+      <option value={c.id}>{c.etiket}</option>
+    {/each}
+  </select>
+
+  <label class="alan" for="cikis-cihazi">Kulaklık / hoparlör</label>
+  <select
+    id="cikis-cihazi"
+    value={cikisSecili ?? ""}
+    disabled={!cikisDestekli}
+    onchange={(e) => onCikisCihazi(deger(e.currentTarget.value))}
+  >
+    <option value="">Varsayılan</option>
+    {#each cikislar as c (c.id)}
+      <option value={c.id}>{c.etiket}</option>
+    {/each}
+  </select>
+  {#if !cikisDestekli}
+    <p class="uyari" role="status">
+      Tarayıcın çıkış cihazı seçimini desteklemiyor; sistem varsayılanı kullanılıyor.
+    </p>
+  {/if}
+
+  <div class="testler">
+    <button type="button" class="test" onclick={onBip}>Sesi test et</button>
+    <button
+      type="button"
+      class="test"
+      disabled={voice.mikYok}
+      onpointerdown={onGeriDinlemeBasla}
+      onpointerup={onGeriDinlemeBitir}
+      onpointerleave={onGeriDinlemeBitir}
+    >Kendini dinle</button>
+  </div>
+
+  <div class="ayirac"></div>
 
   <label class="alan" for="esik">
     Giriş hassasiyeti
@@ -133,7 +221,7 @@
 <style>
   .panel {
     position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 20;
-    width: 260px; display: flex; flex-direction: column; gap: 8px;
+    width: 280px; display: flex; flex-direction: column; gap: 8px;
     padding: 12px; border-radius: var(--radius);
     background: var(--zemin-2); border: 1px solid var(--cizgi);
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
@@ -166,6 +254,15 @@
     border: 1px solid var(--cizgi); border-radius: 4px; padding: 4px 6px;
     font-size: 12px;
   }
+  select { width: 100%; text-overflow: ellipsis; }
+  .testler { display: flex; gap: 6px; }
+  .test {
+    flex: 1; padding: 5px 6px; font-size: 11px; cursor: pointer;
+    background: var(--zemin-0); color: var(--metin-1);
+    border: 1px solid var(--cizgi); border-radius: 4px;
+  }
+  .test:hover:not(:disabled) { border-color: var(--bal); }
+  .test:disabled { opacity: 0.45; cursor: default; }
   .kisayol { justify-content: space-between; }
   .kisayol input {
     width: 84px; text-align: center;

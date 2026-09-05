@@ -8,15 +8,27 @@
 
   let ayarlarAcik = $state(false);
 
-  let { mod, kisayolSonuclari, onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen, onToggleGorunum, onSesAyari, onLeave }: {
+  let {
+    mod, kisayolSonuclari, girisSecili, cikisSecili,
+    onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen, onToggleGorunum,
+    onSesAyari, onGirisCihazi, onCikisCihazi, onBip,
+    onGeriDinlemeBasla, onGeriDinlemeBitir, onLeave,
+  }: {
     mod: GorunumModu;
     kisayolSonuclari: KayitSonucu[];
+    girisSecili: string | null;
+    cikisSecili: string | null;
     onToggleMute: () => void;
     onToggleDeafen: () => void;
     onToggleCamera: () => void;
     onToggleScreen: () => void;
     onToggleGorunum: () => void;
     onSesAyari: (a: SesAyarlari) => void;
+    onGirisCihazi: (id: string | null) => void;
+    onCikisCihazi: (id: string | null) => void;
+    onBip: () => void;
+    onGeriDinlemeBasla: () => void;
+    onGeriDinlemeBitir: () => void;
     onLeave: () => void;
   } = $props();
 </script>
@@ -61,7 +73,13 @@
         onclick={() => (ayarlarAcik = !ayarlarAcik)}
       ><Icon ad="ayar" /></button>
       {#if ayarlarAcik}
-        <SesAyarlariPanel {kisayolSonuclari} onKapat={() => (ayarlarAcik = false)} onDegis={onSesAyari} />
+        <SesAyarlariPanel
+          {kisayolSonuclari} {girisSecili} {cikisSecili}
+          {onGirisCihazi} {onCikisCihazi} {onBip}
+          {onGeriDinlemeBasla} {onGeriDinlemeBitir}
+          onKapat={() => (ayarlarAcik = false)}
+          onDegis={onSesAyari}
+        />
       {/if}
     </div>
 
