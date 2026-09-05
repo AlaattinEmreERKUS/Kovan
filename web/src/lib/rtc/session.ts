@@ -7,6 +7,7 @@ import { Peer, type SignalPayload, type TrackSlot } from "./peer";
 import { SpeakingDetector } from "./speaking";
 import { ekranMikseri, mikrofonMikseri, type RemoteAudioMixer } from "./gain";
 import { MikrofonIsleyici } from "./mikrofon";
+import { SesTestcisi } from "./ses-testi";
 import { sesAyarlariOku, sesAyarlariYaz, type SesAyarlari } from "../ses-ayarlari";
 import { cihazSecimiOku, cihazSecimiYaz, type CihazSecimi } from "../ses-cihazlari";
 import {
@@ -62,6 +63,8 @@ export class VoiceSession {
   micMixer: RemoteAudioMixer | null = null;
   /** Giden mikrofonun kapisi. Yoksa ham track gonderilir. */
   private mikIsleyici: MikrofonIsleyici | null = null;
+  /** Panelin test araci. Oturumun context'ini odunc alir. */
+  private sesTestcisi: SesTestcisi | null = null;
   /**
    * Kullanici ses kanalinda OLMAK ISTIYOR mu. `voice.joined` fiili durumdur ve
    * kopmada dusurulur; niyet kopmayi asar. Ikisini ayirmadan "ag koptu" ile
@@ -138,6 +141,7 @@ export class VoiceSession {
         });
         this.mikIsleyici.setMod(voice.sesAyarlari.girisModu);
       }
+      this.sesTestcisi = new SesTestcisi(this.audioCtx);
       this.mixer = ekranMikseri(this.audioCtx);
       this.mixer.setDeafened(voice.deafened);
       this.micMixer = mikrofonMikseri(this.audioCtx);
@@ -248,6 +252,8 @@ export class VoiceSession {
     this.mikIsleyici?.close();
     this.mikIsleyici = null;
     voice.girisSeviyesi = 0;
+    this.sesTestcisi?.kapat();
+    this.sesTestcisi = null;
     this.mixer?.close();
     this.mixer = null;
     this.micMixer?.close();
@@ -277,6 +283,15 @@ export class VoiceSession {
   /** Kapidan gecmis track varsa o gider; yoksa ham mikrofon. */
   private gidenMik(): MediaStreamTrack | null {
     return this.mikIsleyici?.cikis ?? this.media.mic;
+  }
+
+  testci(): SesTestcisi | null {
+    return this.sesTestcisi;
+  }
+
+  /** Panelin geri dinlemede calacagi track: kapidan GECMIS olan. */
+  gidenMikPublic(): MediaStreamTrack | null {
+    return this.gidenMik();
   }
 
   /**
