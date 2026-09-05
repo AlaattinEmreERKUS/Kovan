@@ -111,6 +111,9 @@ export class VoiceSession {
     }
     voice.mikYok = !mikVar;
     voice.etkinGiris = mikVar ? this.cihazSecimi.giris : null;
+    // Kalici kaynak localStorage; store yalniz aynasidir ve resetVoice onu
+    // siler. Her katilimda yeniden yayilmazsa panel tercihi bos gorurdu.
+    this.tercihiYayinla();
 
     this.ice = (await this.fetchIce()) ?? YEDEK_ICE;
     this.iceTazelemeBasla();
@@ -304,6 +307,17 @@ export class VoiceSession {
     else voice.speaking.delete(this.o.selfId);
   };
 
+  /**
+   * Tercihi store'a aynalar. Arayuz oradan okur, buradaki metotlardan DEGIL:
+   * metot cagrisi tepkisel degil, Svelte prop'un degismedigini gorup acilir
+   * menuyu repaint etmiyordu. Cihaz cikip geri takilinca ses geri geliyor ama
+   * menu "Varsayilan"da kaliyordu (2026-09-05 fiziksel test).
+   */
+  private tercihiYayinla(): void {
+    voice.girisTercihi = this.cihazSecimi.giris;
+    voice.cikisTercihi = this.cihazSecimi.cikis;
+  }
+
   /** Arayuz secili degeri buradan okur; etkin cihazdan AYRIDIR. */
   girisTercihi(): string | null {
     return this.cihazSecimi.giris;
@@ -352,6 +366,7 @@ export class VoiceSession {
   async setCikisCihazi(id: string | null): Promise<void> {
     this.cihazSecimi = { ...this.cihazSecimi, cikis: id };
     cihazSecimiYaz(this.cihazSecimi);
+    this.tercihiYayinla();
     await this.cikisiUygula(id);
   }
 
@@ -387,6 +402,7 @@ export class VoiceSession {
   async setGirisCihazi(id: string | null): Promise<void> {
     this.cihazSecimi = { ...this.cihazSecimi, giris: id };
     cihazSecimiYaz(this.cihazSecimi);
+    this.tercihiYayinla();
     await this.mikrofonuUygula(id);
   }
 

@@ -93,3 +93,51 @@ describe("cihaz kaybolunca kurtarma", () => {
     expect(olaylar.sayi("devicechange")).toBe(0);
   });
 });
+
+/**
+ * Tercih VoiceSession'in ozel alanindaydi; arayuz onu metot cagrisiyla
+ * okuyordu ve Svelte prop'un degismedigini gorup menuyu repaint etmiyordu.
+ * Cihaz cikip geri takilinca ses geri geliyor ama acilir menu "Varsayilan"da
+ * kaliyordu. Tercih artik store'da, yani tepkisel.
+ */
+describe("tercih store'a yayilir", () => {
+  it("secim store'a yazilir", async () => {
+    const { session } = kur();
+    voice.members = [uye("u2")];
+    await session.join();
+
+    await session.setGirisCihazi("mik-1");
+    await session.setCikisCihazi("kulaklik-1");
+
+    expect(voice.girisTercihi).toBe("mik-1");
+    expect(voice.cikisTercihi).toBe("kulaklik-1");
+  });
+
+  it("cihaz kaybolunca ETKIN duser ama TERCIH store'da durur", async () => {
+    const { session, cihazlar, olaylar } = kur();
+    voice.members = [uye("u2")];
+    await session.join();
+    cihazlar.liste = [
+      { deviceId: "mik-1", kind: "audioinput", label: "A", groupId: "g" },
+    ] as MediaDeviceInfo[];
+    await session.setGirisCihazi("mik-1");
+
+    cihazlar.liste = [];
+    await olaylar.tetikle("devicechange");
+
+    expect(voice.etkinGiris).toBeNull();
+    expect(voice.girisTercihi).toBe("mik-1");
+  });
+
+  it("katilimda kayitli tercih store'a yayilir", async () => {
+    const { session } = kur();
+    voice.members = [uye("u2")];
+    await session.join();
+    await session.setGirisCihazi("mik-1");
+    session.leave();
+
+    await session.join();
+
+    expect(voice.girisTercihi).toBe("mik-1");
+  });
+});

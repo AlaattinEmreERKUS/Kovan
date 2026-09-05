@@ -78,6 +78,15 @@ export const voice = $state({
    * varsayilana duseriz ama tercih durur, geri takilinca ona doneriz.
    */
   etkinGiris: null as string | null,
+  /**
+   * Kullanicinin SECTIGI cihazlar. Etkin cihazdan ayridir ve cihaz kaybolunca
+   * SILINMEZ. Burada durmalari sart -- VoiceSession'in ozel alaninda DEGIL:
+   * arayuz tercihi metot cagrisiyla okuyordu, Svelte prop'un degismedigini
+   * gorup acilir menuyu repaint etmiyordu. Cihaz cikip geri takilinca ses geri
+   * geliyor ama menu "Varsayilan"da kaliyordu (2026-09-05 fiziksel test).
+   */
+  girisTercihi: null as string | null,
+  cikisTercihi: null as string | null,
   sesAyarlari: sesAyarlariOku() as SesAyarlari,
 });
 
@@ -112,4 +121,8 @@ export function resetVoice(): void {
   voice.cikisCihazi = null;
   voice.mikYok = false;
   voice.etkinGiris = null;
+  // Tercihler de sifirlanir: kalici kaynak localStorage, VoiceSession her
+  // join()'de oradan okuyup buraya yayar. Store yalniz aynadir.
+  voice.girisTercihi = null;
+  voice.cikisTercihi = null;
 }

@@ -11,15 +11,13 @@
   import VoiceControls from "./VoiceControls.svelte";
 
   let {
-    selfId, kisayolSonuclari, girisSecili, cikisSecili,
+    selfId, kisayolSonuclari,
     onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen, onSesAyari,
     onGirisCihazi, onCikisCihazi, onBip, onGeriDinlemeBasla, onGeriDinlemeBitir,
     onLeave,
   }: {
     selfId: string;
     kisayolSonuclari: KayitSonucu[];
-    girisSecili: string | null;
-    cikisSecili: string | null;
     onToggleMute: () => void;
     onToggleDeafen: () => void;
     onToggleCamera: () => void;
@@ -127,8 +125,6 @@
   <VoiceControls
     {mod}
     {kisayolSonuclari}
-    {girisSecili}
-    {cikisSecili}
     {onToggleMute}
     {onToggleDeafen}
     {onToggleCamera}

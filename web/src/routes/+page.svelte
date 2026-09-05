@@ -129,6 +129,17 @@
         cam: izDurumu(voice.local.cam),
         screenVideo: izDurumu(voice.local.screenVideo),
       },
+      // Tercih ile ETKIN cihaz AYRI raporlanir: 2026-09-05'te kulaklik geri
+      // takilinca ses geri donuyor ama menu "Varsayilan"da kaliyordu ve
+      // buradan hangisinin yalan soyledigi gorulemiyordu.
+      cihazlar: {
+        girisTercihi: voice.girisTercihi,
+        cikisTercihi: voice.cikisTercihi,
+        etkinGiris: voice.etkinGiris,
+        etkinCikis: voice.cikisCihazi,
+        mikYok: voice.mikYok,
+        calanMikrofon: oturum?.mikAyari()?.deviceId ?? null,
+      },
       sunucununGorduguUyeler: voice.members,
       uzakTrackler: [...voice.remote.entries()].map(([id, t]) => ({
         userId: id,
@@ -215,8 +226,6 @@
       <VoiceStage
         selfId={store.me.id}
         {kisayolSonuclari}
-        girisSecili={oturum?.girisTercihi() ?? null}
-        cikisSecili={oturum?.cikisTercihi() ?? null}
         onToggleMute={() => oturum?.setMuted(!voice.muted)}
         onToggleDeafen={() => oturum?.setDeafened(!voice.deafened)}
         onToggleCamera={() => void oturum?.setCamera(!voice.camera)}

@@ -15,12 +15,10 @@
   } from "$lib/rtc/cihazlar";
 
   let {
-    kisayolSonuclari, girisSecili, cikisSecili, onKapat, onDegis,
+    kisayolSonuclari, onKapat, onDegis,
     onGirisCihazi, onCikisCihazi, onBip, onGeriDinlemeBasla, onGeriDinlemeBitir,
   }: {
     kisayolSonuclari: KayitSonucu[];
-    girisSecili: string | null;
-    cikisSecili: string | null;
     onKapat: () => void;
     onDegis: (a: SesAyarlari) => void;
     onGirisCihazi: (id: string | null) => void;
@@ -35,14 +33,43 @@
   const cikisDestekli = cikisDesteginVar();
 
   /**
+   * Secim TERCIHTEN okunur, etkin cihazdan degil: cihaz kaybolunca varsayilana
+   * duseriz ama kullanicinin secimi durur ve menu onu gostermeye devam etmeli.
+   * Store'dan okundugu icin tepkiseldir; metot cagrisiyken cihaz geri
+   * takilinca menu repaint olmuyordu.
+   */
+  const girisSecili = $derived(voice.girisTercihi);
+  const cikisSecili = $derived(voice.cikisTercihi);
+
+  /** Gorulmus etiketler. Cihaz cikinca adini listeden okuyamayiz. */
+  let etiketler = $state<Record<string, string>>({});
+
+  /**
    * enumerateDevices izin verilene kadar BOS etiket doner; once izin alinir,
    * yoksa kullanici "Adsiz cihaz" listesi gorurdu.
    */
   async function cihazlariTazele() {
     const deps = tarayiciCihazDeps();
     await izinAl(deps);
-    ({ girisler, cikislar } = await cihazlariListele(deps));
+    const bulunan = await cihazlariListele(deps);
+    girisler = bulunan.girisler;
+    cikislar = bulunan.cikislar;
+    const yeni = { ...etiketler };
+    for (const c of [...bulunan.girisler, ...bulunan.cikislar]) yeni[c.id] = c.etiket;
+    etiketler = yeni;
   }
+
+  /**
+   * Tercih edilen cihaz su an BAGLI DEGILSE listede yoktur; `<select>` degeri
+   * hicbir secenekle eslesmeyince tarayici ilk secenegi gosterir ve kullanici
+   * secimini kaybetmis SANIR. Hayalet secenek secimi gorunur tutar.
+   */
+  function hayalet(secili: string | null, liste: Cihaz[]): Cihaz | null {
+    if (!secili || liste.some((c) => c.id === secili)) return null;
+    return { id: secili, etiket: `${etiketler[secili] ?? "Seçili cihaz"} (bağlı değil)` };
+  }
+  const girisHayalet = $derived(hayalet(girisSecili, girisler));
+  const cikisHayalet = $derived(hayalet(cikisSecili, cikislar));
 
   $effect(() => {
     void cihazlariTazele();
@@ -108,6 +135,9 @@
     {#each girisler as c (c.id)}
       <option value={c.id}>{c.etiket}</option>
     {/each}
+    {#if girisHayalet}
+      <option value={girisHayalet.id}>{girisHayalet.etiket}</option>
+    {/if}
   </select>
 
   <label class="alan" for="cikis-cihazi">Kulaklık / hoparlör</label>
@@ -121,6 +151,9 @@
     {#each cikislar as c (c.id)}
       <option value={c.id}>{c.etiket}</option>
     {/each}
+    {#if cikisHayalet}
+      <option value={cikisHayalet.id}>{cikisHayalet.etiket}</option>
+    {/if}
   </select>
   {#if !cikisDestekli}
     <p class="uyari" role="status">

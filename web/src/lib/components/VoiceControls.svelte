@@ -9,15 +9,13 @@
   let ayarlarAcik = $state(false);
 
   let {
-    mod, kisayolSonuclari, girisSecili, cikisSecili,
+    mod, kisayolSonuclari,
     onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen, onToggleGorunum,
     onSesAyari, onGirisCihazi, onCikisCihazi, onBip,
     onGeriDinlemeBasla, onGeriDinlemeBitir, onLeave,
   }: {
     mod: GorunumModu;
     kisayolSonuclari: KayitSonucu[];
-    girisSecili: string | null;
-    cikisSecili: string | null;
     onToggleMute: () => void;
     onToggleDeafen: () => void;
     onToggleCamera: () => void;
@@ -74,7 +72,7 @@
       ><Icon ad="ayar" /></button>
       {#if ayarlarAcik}
         <SesAyarlariPanel
-          {kisayolSonuclari} {girisSecili} {cikisSecili}
+          {kisayolSonuclari}
           {onGirisCihazi} {onCikisCihazi} {onBip}
           {onGeriDinlemeBasla} {onGeriDinlemeBitir}
           onKapat={() => (ayarlarAcik = false)}
