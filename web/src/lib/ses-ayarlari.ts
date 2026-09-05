@@ -32,7 +32,7 @@ export interface DepoBenzeri {
   setItem(anahtar: string, deger: string): void;
 }
 
-function varsayilanDepo(): DepoBenzeri | null {
+export function varsayilanDepo(): DepoBenzeri | null {
   try {
     return typeof localStorage === "undefined" ? null : localStorage;
   } catch {
