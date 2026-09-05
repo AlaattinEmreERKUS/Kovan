@@ -127,14 +127,21 @@ describe("VoiceSession katilma", () => {
     expect(pcler[0].transceivers[0].sender.replaceTrack).toHaveBeenCalledWith(mikrofon);
   });
 
-  it("mikrofon izni reddedilirse seste gorunmez ve hata yazilir", async () => {
+  /**
+   * Davranis 2026-09-05'te DEGISTI. Once burada kanala hic girilmiyordu ve
+   * mikrofonunu kaybeden kullanici ayarlardan cihaz secip kendini
+   * kurtaramiyordu: sayfa yenilemeden geri donus yoktu. Artik mikrofonsuz
+   * girilir, digerleri duyulur ve cihaz sonradan devreye alinir.
+   */
+  it("mikrofon izni reddedilirse mikrofonsuz katilir ve hata yazilir", async () => {
     const { session, gonderilen } = kur();
     const s = session as unknown as { media: LocalMedia };
     s.media.startMic = vi.fn(async () => { throw new Error("reddedildi"); });
     await session.join();
-    expect(voice.joined).toBe(false);
+    expect(voice.joined).toBe(true);
+    expect(voice.mikYok).toBe(true);
     expect(voice.error).toMatch(/[Mm]ikrofon/);
-    expect(gonderilen).not.toContainEqual({ t: "voice.join" });
+    expect(gonderilen).toContainEqual({ t: "voice.join" });
   });
 });
 

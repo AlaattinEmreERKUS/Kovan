@@ -82,14 +82,19 @@ export class VoiceSession {
     if (this.mesh) return;
     voice.error = null;
 
+    // Mikrofon ARTIK on kosul DEGIL. Onceden burada donuluyordu ve mikrofonunu
+    // kaybeden kullanici kanala hic giremiyor, dolayisiyla ayarlardan cihaz
+    // secip kendini kurtaramiyordu: sayfa yenilemeden geri donus yoktu.
+    // Mikrofonsuz da girilir, digerleri duyulur, cihaz sonradan devreye alinir.
+    let mikVar = true;
     try {
-      await this.media.startMic();
+      await this.media.startMic(this.cihazSecimi.giris);
     } catch {
-      // En sik gercek ariza bu: kullanici izni reddetti ya da cihaz yok.
-      // Seste gorunup sessiz durmak, hata gostermekten cok daha kotu.
-      voice.error = "Mikrofona erişilemedi. Tarayıcı izinlerini kontrol edin.";
-      return;
+      mikVar = false;
+      voice.error = "Mikrofona erişilemedi. Ses ayarlarından cihaz seçebilirsin.";
     }
+    voice.mikYok = !mikVar;
+    voice.etkinGiris = mikVar ? this.cihazSecimi.giris : null;
 
     this.ice = (await this.fetchIce()) ?? YEDEK_ICE;
     this.iceTazelemeBasla();
