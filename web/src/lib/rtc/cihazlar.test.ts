@@ -27,17 +27,19 @@ describe("cihazlariListele", () => {
     expect(cikislar).toEqual([{ id: "s1", etiket: "Kulaklik A" }]);
   });
 
-  /** Chromium ayni cihazi default + communications + gercek id olarak ucler. */
-  it("communications ikizini eler, default'u Varsayilan yapar", async () => {
+  /**
+   * Chromium ayni cihazi default + communications + gercek id olarak ucler.
+   * IKISI DE sahte, ikisi de elenir. "Sistem varsayilani"nin tek temsili
+   * arayuzdeki bos degerdir; `default`i ayrica listelemek menude IKI
+   * "Varsayilan" satiri uretiyordu (2026-09-05 fiziksel test).
+   */
+  it("default ve communications ikizlerini eler", async () => {
     const { girisler } = await cihazlariListele(deps([
       bilgi("default", "audioinput", "Varsayilan - Mikrofon A"),
       bilgi("communications", "audioinput", "Iletisim - Mikrofon A"),
       bilgi("m1", "audioinput", "Mikrofon A"),
     ]));
-    expect(girisler).toEqual([
-      { id: "default", etiket: "Varsayılan" },
-      { id: "m1", etiket: "Mikrofon A" },
-    ]);
+    expect(girisler).toEqual([{ id: "m1", etiket: "Mikrofon A" }]);
   });
 
   it("etiket bossa adsiz cihaz yazar", async () => {

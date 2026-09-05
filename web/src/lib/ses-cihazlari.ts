@@ -19,9 +19,22 @@ export const CIHAZ_SECIMI_VARSAYILAN: CihazSecimi = { giris: null, cikis: null }
 
 const ANAHTAR = "kovan_ses_cihazlari";
 
-/** Taninmayan deger null'a duser: eski ya da elle bozulmus kayit is gormesin. */
+/**
+ * Chromium'un SAHTE cihaz kimlikleri. Gercek bir cihazi degil, "o an sistem
+ * varsayilani ne ise o"yu gosterirler; bizde bunun temsili zaten `null`.
+ * Tek anlamin iki temsili olunca menude iki ayri "Varsayilan" satiri cikti
+ * (2026-09-05 fiziksel test).
+ */
+export const SAHTE_KIMLIKLER = ["default", "communications"];
+
+/**
+ * Taninmayan deger null'a duser: eski ya da elle bozulmus kayit is gormesin.
+ * Sahte kimlikler de null'a iner -- bu degisiklikten ONCE kaydedilmis bir
+ * secim onlari tasiyor olabilir ve menude "(bagli degil)" hayaleti uretirdi.
+ */
 function kimlik(v: unknown): string | null {
-  return typeof v === "string" && v.length > 0 ? v : null;
+  if (typeof v !== "string" || v.length === 0) return null;
+  return SAHTE_KIMLIKLER.includes(v) ? null : v;
 }
 
 export function cihazSecimiOku(depo: DepoBenzeri | null = varsayilanDepo()): CihazSecimi {

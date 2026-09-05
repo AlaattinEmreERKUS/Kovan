@@ -1,3 +1,5 @@
+import { SAHTE_KIMLIKLER } from "../ses-cihazlari";
+
 export interface Cihaz {
   id: string;
   etiket: string;
@@ -34,18 +36,18 @@ export async function izinAl(deps: CihazDeps): Promise<boolean> {
 /**
  * Chromium ayni fiziksel cihazi UC kayitla dondurur: `default`,
  * `communications` ve gercek id. Ucu de gostermek kullaniciya ayni kulakligi
- * uc kez secmek gibi gorunur. `communications` elenir, `default` tek bir
- * "Varsayilan" satirina iner.
+ * uc kez secmek gibi gorunur.
+ *
+ * IKI sahte kayit da elenir. "Sistem varsayilani" arayuzde zaten BOS deger
+ * olarak duruyor; `default`i ayrica listelemek menude iki ayri "Varsayilan"
+ * satiri uretiyordu (2026-09-05 fiziksel test). Tek anlam, tek temsil.
  */
 function suz(liste: MediaDeviceInfo[], kind: MediaDeviceKind): Cihaz[] {
   const out: Cihaz[] = [];
   for (const d of liste) {
     if (d.kind !== kind) continue;
-    if (d.deviceId === "communications") continue;
-    out.push({
-      id: d.deviceId,
-      etiket: d.deviceId === "default" ? "Varsayılan" : (d.label || "Adsız cihaz"),
-    });
+    if (SAHTE_KIMLIKLER.includes(d.deviceId)) continue;
+    out.push({ id: d.deviceId, etiket: d.label || "Adsız cihaz" });
   }
   return out;
 }

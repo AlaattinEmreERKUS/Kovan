@@ -51,3 +51,16 @@ describe("cihaz secimi kaliciligi", () => {
     expect(cihazSecimiOku(null)).toEqual(CIHAZ_SECIMI_VARSAYILAN);
   });
 });
+
+/**
+ * Chromium'un sahte kimlikleri artik listelenmiyor, ama bu degisiklikten
+ * ONCE kaydedilmis bir secim onlari tasiyor olabilir. Ikisi de "sistem
+ * varsayilani" demek; null'a indirilmezse menude "(bagli degil)" hayaleti
+ * cikardi.
+ */
+describe("sahte kimlikler", () => {
+  it("kayitli default ve communications null sayilir", () => {
+    const depo = sahteDepo({ kovan_ses_cihazlari: '{"giris":"default","cikis":"communications"}' });
+    expect(cihazSecimiOku(depo)).toEqual(CIHAZ_SECIMI_VARSAYILAN);
+  });
+});
