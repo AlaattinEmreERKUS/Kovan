@@ -8,6 +8,7 @@ import { SpeakingDetector } from "./speaking";
 import { ekranMikseri, mikrofonMikseri, type RemoteAudioMixer } from "./gain";
 import { MikrofonIsleyici } from "./mikrofon";
 import { sesAyarlariOku, sesAyarlariYaz, type SesAyarlari } from "../ses-ayarlari";
+import { cihazSecimiOku, cihazSecimiYaz, type CihazSecimi } from "../ses-cihazlari";
 
 export interface SessionOptions {
   conn: Connection;
@@ -63,6 +64,8 @@ export class VoiceSession {
   private niyetDeafened = false;
   /** TURN credential tazeleme dongusu. Yalnizca kanaldayken doner. */
   private iceZamanlayici: ReturnType<typeof setInterval> | null = null;
+  /** Kullanicinin cihaz TERCIHI. Etkin cihaz bundan ayridir (voice.etkinGiris). */
+  private cihazSecimi: CihazSecimi = cihazSecimiOku();
 
   constructor(private o: SessionOptions) {
     this.media = o.media ?? new LocalMedia();
@@ -110,11 +113,7 @@ export class VoiceSession {
           ctx: this.audioCtx,
           track: this.media.mic,
           esik: voice.sesAyarlari.esik,
-          onSeviye: (seviye, acik) => {
-            voice.girisSeviyesi = seviye;
-            if (acik && !voice.muted) voice.speaking.add(this.o.selfId);
-            else voice.speaking.delete(this.o.selfId);
-          },
+          onSeviye: this.seviyeGeldi,
         });
         this.mikIsleyici.setMod(voice.sesAyarlari.girisModu);
       }
@@ -253,6 +252,68 @@ export class VoiceSession {
   /** Kapidan gecmis track varsa o gider; yoksa ham mikrofon. */
   private gidenMik(): MediaStreamTrack | null {
     return this.mikIsleyici?.cikis ?? this.media.mic;
+  }
+
+  /**
+   * Kapinin karari. Kendi gostergen kapidan gelir: kapi kapaliyken karsi
+   * taraf seni duymuyor, gostergenin yaniyor olmasi yanlis bilgi olurdu.
+   */
+  private seviyeGeldi = (seviye: number, acik: boolean): void => {
+    voice.girisSeviyesi = seviye;
+    if (acik && !voice.muted) voice.speaking.add(this.o.selfId);
+    else voice.speaking.delete(this.o.selfId);
+  };
+
+  /**
+   * Tercihi kaydeder ve uygular. Uygulanamazsa tercih yine de saklanir:
+   * cihaz sonradan gelirse devicechange onu devreye alir.
+   */
+  async setGirisCihazi(id: string | null): Promise<void> {
+    this.cihazSecimi = { ...this.cihazSecimi, giris: id };
+    cihazSecimiYaz(this.cihazSecimi);
+    await this.mikrofonuUygula(id);
+  }
+
+  /**
+   * Mikrofonu verilen cihaza alir. SIRA KRITIK: once yenisi alinir, sonra
+   * mesh'e konur, ANCAK ondan sonra eskisi birakilir. Ters sirada karsi taraf
+   * iki islem arasinda sessizlik duyar.
+   *
+   * `false` = degisemedi, mevcut duzen aynen duruyor.
+   */
+  private async mikrofonuUygula(id: string | null): Promise<boolean> {
+    if (!this.audioCtx) return false;
+
+    let yeni: MediaStreamTrack;
+    let eski: MediaStreamTrack | null;
+    try {
+      ({ yeni, eski } = await this.media.mikDegistir(id));
+    } catch {
+      voice.error = "Seçilen mikrofona erişilemedi.";
+      return false;
+    }
+
+    const eskiIsleyici = this.mikIsleyici;
+    this.mikIsleyici = new MikrofonIsleyici({
+      ctx: this.audioCtx,
+      track: yeni,
+      esik: voice.sesAyarlari.esik,
+      onSeviye: this.seviyeGeldi,
+    });
+    this.mikIsleyici.setMod(voice.sesAyarlari.girisModu);
+
+    // replaceTrack: yeni transceiver acilmaz, renegotiation olmaz.
+    this.mesh?.setTrack("mic", this.gidenMik());
+
+    eskiIsleyici?.close();
+    eski?.stop();
+
+    // Yeni track mute durumunu MIRAS ALMAZ.
+    this.media.setMuted(voice.muted);
+    voice.mikYok = false;
+    voice.etkinGiris = id;
+    voice.error = null;
+    return true;
   }
 
   /** Kapi esigi ve tarayici filtreleri; ikisi de yerel ve kaliciDIR. */

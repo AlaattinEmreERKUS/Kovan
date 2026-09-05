@@ -66,6 +66,18 @@ export const voice = $state({
   mikMikseri: null as RemoteAudioMixer | null,
   /** Giden mikrofonun anlik seviyesi (RMS); ayar ekranindaki cubuk. */
   girisSeviyesi: 0,
+  /**
+   * Secili CIKIS cihazi. Uzak sesin tamami AudioContext'ten aktigi icin asil
+   * yonlendirme orada yapilir; bu alani yalniz yedek <audio> yolu okur.
+   */
+  cikisCihazi: null as string | null,
+  /** Kanaldayiz ama mikrofon YOK. Arayuz bunu acikca gosterir. */
+  mikYok: false,
+  /**
+   * O an GERCEKTEN calan giris cihazi. Tercihten ayridir: kulaklik cikarilinca
+   * varsayilana duseriz ama tercih durur, geri takilinca ona doneriz.
+   */
+  etkinGiris: null as string | null,
   sesAyarlari: sesAyarlariOku() as SesAyarlari,
 });
 
@@ -97,4 +109,7 @@ export function resetVoice(): void {
   voice.ekranMikseri = null;
   voice.mikMikseri = null;
   voice.girisSeviyesi = 0;
+  voice.cikisCihazi = null;
+  voice.mikYok = false;
+  voice.etkinGiris = null;
 }
