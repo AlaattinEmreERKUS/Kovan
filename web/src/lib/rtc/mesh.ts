@@ -46,6 +46,10 @@ export class Mesh {
     for (const peer of this.peers.values()) peer.setTrack(slot, track);
   }
 
+  setIceServers(iceServers: RTCIceServer[]): void {
+    for (const peer of this.peers.values()) peer.setIceServers(iceServers);
+  }
+
   has(userId: string): boolean {
     return this.peers.has(userId);
   }

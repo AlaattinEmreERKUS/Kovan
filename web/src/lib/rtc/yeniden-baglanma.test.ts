@@ -149,85 +149,64 @@ describe("yeniden baglanma", () => {
 });
 
 /**
- * Ses P2P akar; sinyal kanalinin bir saniyeligine gitmesi sesi kesmemeli.
- * Mesh'i kopus anINDA yikarsak her ag dalgalanmasinda konusma kesilir.
+ * Kopmada mesh SIMETRIK birakilir.
+ *
+ * Onceden istemci baglantilari 15 sn askida tutuyordu, ama sunucu kopan
+ * uyeyi voice.members'tan ANINDA dusuruyor: karsi taraf kendi peer'ini hemen
+ * kapatiyordu. Yani tolerans ses kazandirmiyor, yalnizca asimetri uretiyordu
+ * -- geri donen kisi eski peer'ini koruyup yenisini kurmuyor, karsi taraf ise
+ * yeni bir peer aciyordu. Yeni peer polite tarafa duserse offer HIC
+ * uretilmiyor ve ses ancak ICE "failed"a dusunce (~30 sn) geri geliyordu.
+ *
+ * Iki taraf da bastan kurunca politeness sirasi devreye girmez.
  */
-describe("kisa kopma toleransi", () => {
+describe("kopmada simetrik birakma", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it("kopus aninda peer baglantilari kapanmaz", async () => {
+  it("kopus aninda peer baglantilari kapanir", async () => {
     const { session, conn, pcler } = kur();
     voice.members = [uye("u1"), uye("u2")];
     await session.join();
 
     conn.onDisconnect!();
-    expect(pcler[0].kapandi).toBe(false);
-    expect(voice.joined).toBe(true);
+    expect(pcler[0].kapandi).toBe(true);
+    expect(voice.joined).toBe(false);
   });
 
-  it("kopusta uzak track'ler silinmez", async () => {
+  it("kopusta uzak track'ler silinir", async () => {
     const { session, conn } = kur();
     voice.members = [uye("u1"), uye("u2")];
     await session.join();
     voice.remote.set("u1", { mic: null, cam: null, screenVideo: null, screenAudio: null });
 
     conn.onDisconnect!();
-    expect(voice.remote.has("u1")).toBe(true);
+    expect(voice.remote.has("u1")).toBe(false);
   });
 
-  it("store temizligini oturum devraldi diye bildirir", async () => {
+  it("store temizligini Connection'a birakir", async () => {
     const { session, conn } = kur();
     voice.members = [uye("u2")];
     await session.join();
-    expect(conn.onDisconnect!()).toBe(true);
+    expect(conn.onDisconnect!()).toBe(false);
   });
 
-  it("hizli geri donuste mesh korunur, sunucuya yeniden duyurulur", async () => {
+  /** Asimetrinin regresyon testi: geri donuste eski peer KORUNMAZ. */
+  it("hizli geri donuste baglantilar sifirdan kurulur", async () => {
     const { session, conn, pcler, gonderilen } = kur();
     voice.members = [uye("u1"), uye("u2")];
     await session.join();
-    const pcSayisi = pcler.length;
+    const eski = pcler[0];
 
     conn.onDisconnect!();
     vi.advanceTimersByTime(2000);
-    conn.onReconnect!();
-    await vi.advanceTimersByTimeAsync(0);
-
-    // Yeni socket'te inVoice bastan false; kanal yeniden duyurulmali.
-    expect(gonderilen.map((e) => e.t)).toContain("voice.join");
-    // Sunucu katilimda bayraklari sifirlar; mevcut durum geri yazilmali.
-    expect(gonderilen.map((e) => e.t)).toContain("voice.state");
-    // Ama baglantilar ayni: ses hic kesilmedi.
-    expect(pcler).toHaveLength(pcSayisi);
-    expect(pcler[0].kapandi).toBe(false);
-  });
-
-  it("tolerans dolarsa gercekten birakir", async () => {
-    const { session, conn, pcler } = kur();
     voice.members = [uye("u1"), uye("u2")];
-    await session.join();
-
-    conn.onDisconnect!();
-    await vi.advanceTimersByTimeAsync(60_000);
-
-    expect(pcler[0].kapandi).toBe(true);
-    expect(voice.joined).toBe(false);
-  });
-
-  it("tolerans dolduktan sonra geri donuste bastan katilir", async () => {
-    const { session, conn, pcler, gonderilen } = kur();
-    voice.members = [uye("u1"), uye("u2")];
-    await session.join();
-
-    conn.onDisconnect!();
-    await vi.advanceTimersByTimeAsync(60_000);
-    gonderilen.length = 0;
-    voice.members = [uye("u1"), uye("u2")];
-
     conn.onReconnect!();
     await vi.waitFor(() => expect(voice.joined).toBe(true));
+
     expect(gonderilen.map((e) => e.t)).toContain("voice.join");
+    expect(eski.kapandi).toBe(true);
     expect(pcler.length).toBeGreaterThan(1);
+    expect(pcler[pcler.length - 1].kapandi).toBe(false);
   });
 });

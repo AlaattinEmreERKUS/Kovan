@@ -176,6 +176,14 @@ export class Peer {
     }
   }
 
+  /**
+   * TURN credential yenilendi. Yol ve m-line'lar degismez; yalnizca bir
+   * sonraki ICE toplamasinin kullanacagi kimlik bilgisi tazelenir.
+   */
+  setIceServers(iceServers: RTCIceServer[]): void {
+    this.o.pc.setConfiguration({ iceServers });
+  }
+
   close(): void {
     const pc = this.o.pc;
     pc.onnegotiationneeded = null;

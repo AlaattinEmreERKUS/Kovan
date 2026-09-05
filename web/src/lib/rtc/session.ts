@@ -22,12 +22,15 @@ export interface SessionOptions {
 }
 
 /**
- * Sinyal kanali koptuktan sonra baglantilarin ne kadar ayakta tutulacagi.
- * Ses P2P akar: WS'in bir kac saniyeligine gitmesi konusmayi kesmemeli.
- * Connection'in backoff'u 1-2-4-8 sn ilerledigi icin bu pencere ~4 denemeyi
- * kapsar. Suresi dolarsa baglantilar gercekten birakilir.
+ * TURN credential'i ne siklikta tazelenir. Sunucu TTL'i 3600 sn
+ * (server/src/turn.ts); 45 dakika 15 dakikalik emniyet payi birakir.
+ *
+ * Tazelenmezse saatler suren bir oturumda credential oturumun ALTINDA olur:
+ * o andan sonra restartIce() relay adayi toplayamaz ve simetrik NAT
+ * arkasindaki kullanici geri baglanamaz. Ariza sessizdir, cunku STUN
+ * adaylari toplanmaya devam eder.
  */
-const KOPUS_TOLERANSI = 15_000;
+const ICE_TAZELEME = 45 * 60_000;
 
 /** TURN alinamazsa bile kanal acilir; ev aglarinin cogunda STUN yeter. */
 const YEDEK_ICE: RTCIceServer[] = [{ urls: "stun:stun.cloudflare.com:3478" }];
@@ -58,8 +61,8 @@ export class VoiceSession {
   /** Kopma anindaki susturma durumu; geri katilimda geri yuklenir. */
   private niyetMuted = false;
   private niyetDeafened = false;
-  /** Kopus toleransi sayaci. Dolu = baglantilar askida tutuluyor. */
-  private askiZamanlayici: ReturnType<typeof setTimeout> | null = null;
+  /** TURN credential tazeleme dongusu. Yalnizca kanaldayken doner. */
+  private iceZamanlayici: ReturnType<typeof setInterval> | null = null;
 
   constructor(private o: SessionOptions) {
     this.media = o.media ?? new LocalMedia();
@@ -85,7 +88,8 @@ export class VoiceSession {
       return;
     }
 
-    this.ice = await this.fetchIce();
+    this.ice = (await this.fetchIce()) ?? YEDEK_ICE;
+    this.iceTazelemeBasla();
     this.audioCtx = (this.o.createAudioContext ?? (() => new AudioContext()))();
     if (this.audioCtx) {
       // AudioContext tarayici politikasi geregi "suspended" baslayabilir.
@@ -153,47 +157,37 @@ export class VoiceSession {
   }
 
   /**
-   * Sinyal kanali koptu. Baglantilar HEMEN yikilmaz: ses P2P akar ve kisa bir
-   * kopma konusmayi kesmemeli. Tolerans suresince mesh askida tutulur,
-   * suresi dolarsa gercekten birakilir. Sunucuya paket gitmez (socket olu)
-   * ve katilma niyeti korunur.
+   * Sinyal kanali koptu. Mesh HEMEN birakilir; sunucuya paket gitmez (socket
+   * olu) ve katilma niyeti korunur.
    *
-   * `true` = store temizlenmemeli, kullanici hala duyuyor.
+   * Baglantilari askida tutmayi denemistik: ses P2P aktigi icin kisa bir
+   * kopmanin konusmayi kesmemesi gerekiyordu. Ama sunucu kopan uyeyi
+   * voice.members'tan ANINDA dusuruyor, yani karsi taraf kendi peer'ini zaten
+   * hemen kapatiyor ve medya duruyor. Tutmak ses kazandirmiyor, yalnizca
+   * asimetri uretiyordu: geri donen taraf eski peer'ini koruyup yenisini
+   * kurmuyor, karsi taraf ise yeni bir peer aciyordu. Yeni peer polite tarafa
+   * duserse offer HIC uretilmez (onnegotiationneeded'i tetikleyen bir sey
+   * yok) ve ses ancak ICE "failed"a dusunce ~30 sn sonra geri gelir.
+   *
+   * Iki taraf da bastan kurunca politeness sirasi hic devreye girmez.
+   *
+   * `false` = store'u Connection temizlesin.
    */
   private kopus(): boolean {
     if (!this.mesh) return false;
     this.niyetMuted = voice.muted;
     this.niyetDeafened = voice.deafened;
-    if (this.askiZamanlayici) return true;   // arka arkaya kopus: sayaci uzatma
-    this.askiZamanlayici = setTimeout(() => {
-      this.askiZamanlayici = null;
-      // Geri donmedi. Artik tutmanin anlami yok: bayat kareler ve olu
-      // baglantilar kullaniciyi konusuyor sanmaya devam ettirir.
-      this.temizle();
-      voice.members = [];
-    }, KOPUS_TOLERANSI);
-    return true;
+    this.temizle();
+    return false;
   }
 
   /**
-   * Socket geri geldi. Iki yol var:
-   * - Mesh hala askida: baglantilar korunur, kanal sunucuya YENIDEN duyurulur
-   *   (yeni socket'te inVoice bastan false, bayraklar sifirlanmis olur).
-   *   Ses hic kesilmez.
-   * - Tolerans dolmus: bastan katilinir.
+   * Socket geri geldi. Kopmada mesh birakildigi icin bastan katilinir; kopma
+   * anindaki susturma durumu geri yuklenir.
    */
   private yenidenKatil(): void {
     if (!this.katilmaNiyeti) return;
-
-    if (this.mesh) {
-      if (!this.askiZamanlayici) return;   // kopus yok, normal acilis
-      clearTimeout(this.askiZamanlayici);
-      this.askiZamanlayici = null;
-      this.o.conn.send({ t: "voice.join" });
-      // Sunucu katilimda bayraklari sifirlar; mevcut durum geri yazilmali.
-      this.publish();
-      return;
-    }
+    if (this.mesh) return;   // kopus yok, normal acilis
 
     void this.join().then(() => {
       if (!voice.joined) return;
@@ -202,10 +196,26 @@ export class VoiceSession {
     });
   }
 
+  /**
+   * Credential omru dolmadan yenisini alir ve ACIK baglantilara uygular.
+   * Basarisiz alim eskisini KORUR: gecici bir aglama yuzunden TURN'u
+   * dusurup herkesi STUN'a mahkum etmek, tazelememekten daha kotudur.
+   */
+  private iceTazelemeBasla(): void {
+    if (this.iceZamanlayici) return;
+    this.iceZamanlayici = setInterval(() => {
+      void this.fetchIce().then((yeni) => {
+        if (!yeni) return;
+        this.ice = yeni;
+        this.mesh?.setIceServers(yeni);
+      });
+    }, ICE_TAZELEME);
+  }
+
   private temizle(): void {
-    if (this.askiZamanlayici) {
-      clearTimeout(this.askiZamanlayici);
-      this.askiZamanlayici = null;
+    if (this.iceZamanlayici) {
+      clearInterval(this.iceZamanlayici);
+      this.iceZamanlayici = null;
     }
     this.mesh?.close();
     this.mesh = null;
@@ -460,15 +470,16 @@ export class VoiceSession {
     });
   }
 
-  private async fetchIce(): Promise<RTCIceServer[]> {
+  /** `null` = alinamadi. Ilk katilimda YEDEK_ICE'a duser, tazelemede eski korunur. */
+  private async fetchIce(): Promise<RTCIceServer[] | null> {
     const f = this.o.fetchImpl ?? fetch;
     try {
       const res = await f(`${this.o.apiUrl}/api/turn?token=${encodeURIComponent(this.o.token)}`);
-      if (!res.ok) return YEDEK_ICE;
+      if (!res.ok) return null;
       const govde = await res.json() as { iceServers?: RTCIceServer[] };
-      return govde.iceServers?.length ? govde.iceServers : YEDEK_ICE;
+      return govde.iceServers?.length ? govde.iceServers : null;
     } catch {
-      return YEDEK_ICE;
+      return null;
     }
   }
 }
