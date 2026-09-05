@@ -9,6 +9,9 @@ import { ekranMikseri, mikrofonMikseri, type RemoteAudioMixer } from "./gain";
 import { MikrofonIsleyici } from "./mikrofon";
 import { sesAyarlariOku, sesAyarlariYaz, type SesAyarlari } from "../ses-ayarlari";
 import { cihazSecimiOku, cihazSecimiYaz, type CihazSecimi } from "../ses-cihazlari";
+import {
+  cihazlariListele, tarayiciCihazDeps, tarayiciCihazOlaylari, type CihazDeps,
+} from "./cihazlar";
 
 export interface SessionOptions {
   conn: Connection;
@@ -20,6 +23,13 @@ export interface SessionOptions {
   fetchImpl?: typeof fetch;
   /** Node testinde AudioContext yok; disaridan verilebilir. */
   createAudioContext?(): AudioContext | null;
+  /** Node testinde navigator.mediaDevices yok; disaridan verilebilir. */
+  cihazDeps?: CihazDeps;
+  /** devicechange aboneligi. Testte sahtesi verilir. */
+  cihazOlaylari?: {
+    ekle(tip: string, f: () => void): void;
+    kaldir(tip: string, f: () => void): void;
+  };
 }
 
 /**
@@ -66,9 +76,12 @@ export class VoiceSession {
   private iceZamanlayici: ReturnType<typeof setInterval> | null = null;
   /** Kullanicinin cihaz TERCIHI. Etkin cihaz bundan ayridir (voice.etkinGiris). */
   private cihazSecimi: CihazSecimi = cihazSecimiOku();
+  private cihazDeps: CihazDeps;
+  private cihazDegisti = (): void => { void this.cihazlariGozden(); };
 
   constructor(private o: SessionOptions) {
     this.media = o.media ?? new LocalMedia();
+    this.cihazDeps = o.cihazDeps ?? tarayiciCihazDeps();
     o.conn.onVoiceMembers = (members) => this.onMembers(members);
     o.conn.onSignal = (from, data) => this.mesh?.handleSignal(from, data as SignalPayload);
     o.conn.onDisconnect = () => this.kopus();
@@ -147,6 +160,9 @@ export class VoiceSession {
       },
     });
 
+    (this.o.cihazOlaylari ?? tarayiciCihazOlaylari()).ekle("devicechange", this.cihazDegisti);
+    if (this.media.mic) this.mikBittiDinle(this.media.mic);
+
     voice.joined = true;
     this.katilmaNiyeti = true;
     this.o.conn.send({ t: "voice.join" });
@@ -220,6 +236,7 @@ export class VoiceSession {
   }
 
   private temizle(): void {
+    (this.o.cihazOlaylari ?? tarayiciCihazOlaylari()).kaldir("devicechange", this.cihazDegisti);
     if (this.iceZamanlayici) {
       clearInterval(this.iceZamanlayici);
       this.iceZamanlayici = null;
@@ -271,6 +288,51 @@ export class VoiceSession {
     if (acik && !voice.muted) voice.speaking.add(this.o.selfId);
     else voice.speaking.delete(this.o.selfId);
   };
+
+  /** Arayuz secili degeri buradan okur; etkin cihazdan AYRIDIR. */
+  girisTercihi(): string | null {
+    return this.cihazSecimi.giris;
+  }
+
+  cikisTercihi(): string | null {
+    return this.cihazSecimi.cikis;
+  }
+
+  /**
+   * Cihaz listesi degisti. Tercih hala varsa ona doneriz, yoksa varsayilana
+   * duseriz -- ama TERCIHI SILMEYIZ: kulakligi geri takan kullanici onu
+   * yeniden secmek zorunda kalmamali.
+   */
+  private async cihazlariGozden(): Promise<void> {
+    const { girisler, cikislar } = await cihazlariListele(this.cihazDeps);
+
+    const gTercih = this.cihazSecimi.giris;
+    const gVar = gTercih === null || girisler.some((c) => c.id === gTercih);
+    const gHedef = gVar ? gTercih : null;
+    if (voice.etkinGiris !== gHedef) await this.mikrofonuUygula(gHedef);
+
+    const cTercih = this.cihazSecimi.cikis;
+    const cVar = cTercih === null || cikislar.some((c) => c.id === cTercih);
+    const cHedef = cVar ? cTercih : null;
+    if (voice.cikisCihazi !== cHedef) await this.cikisiUygula(cHedef);
+  }
+
+  /**
+   * Track'in `ended`'i cihazin FIZIKSEL olarak gittigi anlamina gelir.
+   * Sirayla: tercih, sonra varsayilan, o da olmazsa mikrofonsuz duruma gec.
+   */
+  private mikBittiDinle(track: MediaStreamTrack): void {
+    track.addEventListener("ended", () => {
+      if (this.media.mic !== track) return;   // eskimis olay
+      void (async () => {
+        if (await this.mikrofonuUygula(this.cihazSecimi.giris)) return;
+        if (this.cihazSecimi.giris !== null && await this.mikrofonuUygula(null)) return;
+        voice.mikYok = true;
+        voice.etkinGiris = null;
+        voice.error = "Mikrofon kayboldu. Ses ayarlarından başka bir cihaz seçebilirsin.";
+      })();
+    });
+  }
 
   async setCikisCihazi(id: string | null): Promise<void> {
     this.cihazSecimi = { ...this.cihazSecimi, cikis: id };
@@ -351,6 +413,7 @@ export class VoiceSession {
     this.media.setMuted(voice.muted);
     voice.mikYok = false;
     voice.etkinGiris = id;
+    this.mikBittiDinle(yeni);
     voice.error = null;
     return true;
   }

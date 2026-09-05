@@ -67,3 +67,12 @@ export async function cihazlariListele(
 export function cikisDesteginVar(): boolean {
   return typeof AudioContext !== "undefined" && "setSinkId" in AudioContext.prototype;
 }
+
+/** Gercek tarayici aboneligi. mediaDevices yoksa islemsiz doner. */
+export function tarayiciCihazOlaylari() {
+  const md = typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
+  return {
+    ekle(tip: string, f: () => void) { md?.addEventListener(tip, f); },
+    kaldir(tip: string, f: () => void) { md?.removeEventListener(tip, f); },
+  };
+}

@@ -56,6 +56,35 @@ export class SahtePC {
 }
 
 /**
+ * Cihaz listesi ve `devicechange` aboneligi. Gercek `navigator.mediaDevices`
+ * node'da yok; testler listeyi elle degistirip olayi tetikler.
+ */
+export function sahteCihazOrtami() {
+  const kayit = new Map<string, Set<() => void>>();
+  const ortam = {
+    liste: [] as MediaDeviceInfo[],
+    olaylar: {
+      ekle(tip: string, f: () => void) {
+        if (!kayit.has(tip)) kayit.set(tip, new Set());
+        kayit.get(tip)!.add(f);
+      },
+      kaldir(tip: string, f: () => void) {
+        kayit.get(tip)?.delete(f);
+      },
+      sayi(tip: string) {
+        return kayit.get(tip)?.size ?? 0;
+      },
+      async tetikle(tip: string) {
+        for (const f of [...(kayit.get(tip) ?? [])]) f();
+        // Dinleyici async is baslatir; mikro gorevlerin bitmesini bekle.
+        await new Promise((r) => setTimeout(r, 0));
+      },
+    },
+  };
+  return ortam;
+}
+
+/**
  * `setSinkId` Chromium 110+ eklentisi; TypeScript'in AudioContext tipinde yok.
  * Testler sahte ctx uzerinde onu dogrudan okuyabilsin diye tip genisletilir.
  */
@@ -116,6 +145,7 @@ export function kur() {
   };
   const pcler: SahtePC[] = [];
   const ctx = sahteCtx();
+  const ortam = sahteCihazOrtami();
   const session = new VoiceSession({
     conn: conn as never,
     selfId: "u2",
@@ -129,8 +159,13 @@ export function kur() {
     },
     createAudioContext: () => ctx,
     fetchImpl: vi.fn(async () => Response.json({ iceServers: [] })) as unknown as typeof fetch,
+    cihazDeps: {
+      enumerateDevices: async () => ortam.liste,
+      getUserMedia: deps.getUserMedia,
+    },
+    cihazOlaylari: ortam.olaylar,
   });
-  return { session, conn, deps, pcler, ctx, uretilen };
+  return { session, conn, deps, pcler, ctx, uretilen, cihazlar: ortam, olaylar: ortam.olaylar };
 }
 
 export const uye = (userId: string) => ({
