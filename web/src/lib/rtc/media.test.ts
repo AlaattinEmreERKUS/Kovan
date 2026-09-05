@@ -208,3 +208,42 @@ describe("LocalMedia ekran kaynagi degistirme", () => {
     expect(media.screenVideo).toBe(eski.video);
   });
 });
+
+describe("LocalMedia cihaz secimi", () => {
+  it("startMic verilen cihazi exact olarak ister", async () => {
+    const { media, deps } = kur();
+    await media.startMic("mik-1");
+    const kisit = (deps.getUserMedia as ReturnType<typeof vi.fn>).mock.calls[0][0].audio;
+    expect(kisit.deviceId).toEqual({ exact: "mik-1" });
+  });
+
+  it("cihaz null ise deviceId hic gonderilmez", async () => {
+    const { media, deps } = kur();
+    await media.startMic(null);
+    const kisit = (deps.getUserMedia as ReturnType<typeof vi.fn>).mock.calls[0][0].audio;
+    expect(kisit).not.toHaveProperty("deviceId");
+  });
+
+  /**
+   * Sira testi: yenisi alinmadan eskisi birakilirsa basarisiz gecis
+   * kullaniciyi mikrofonsuz birakir.
+   */
+  it("mikDegistir eskiyi DURDURMAZ, cagirana devreder", async () => {
+    const { media, mikrofon } = kur();
+    await media.startMic();
+    const { yeni, eski } = await media.mikDegistir("mik-2");
+    expect(eski).toBe(mikrofon);
+    expect(mikrofon.stop).not.toHaveBeenCalled();
+    expect(media.mic).toBe(yeni);
+  });
+
+  it("mikDegistir basarisiz olursa eski track yerinde kalir", async () => {
+    const { media, deps, mikrofon } = kur();
+    await media.startMic();
+    (deps.getUserMedia as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(new Error("OverconstrainedError"));
+    await expect(media.mikDegistir("yok")).rejects.toThrow();
+    expect(media.mic).toBe(mikrofon);
+    expect(mikrofon.stop).not.toHaveBeenCalled();
+  });
+});

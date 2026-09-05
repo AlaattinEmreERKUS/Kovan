@@ -10,8 +10,15 @@ export interface MediaDeps {
  * Tarayici hoparlorunun mikrofona geri beslemesi echoCancellation olmadan
  * mesh'te herkese yankiyla gider; ucu de acik birakilir.
  */
-export function micConstraints(a: SesAyarlari = sesAyarlariOku()): MediaStreamConstraints {
-  return { audio: mikKisitlari(a), video: false };
+export function micConstraints(
+  a: SesAyarlari = sesAyarlariOku(),
+  cihazId: string | null = null,
+): MediaStreamConstraints {
+  const audio: MediaTrackConstraints = mikKisitlari(a);
+  // `exact`: cihaz yoksa sessizce baskasina dusmek yerine hata versin, cunku
+  // "sectigim mikrofon calisiyor mu" sorusunun cevabi belirsiz kalmamali.
+  if (cihazId) audio.deviceId = { exact: cihazId };
+  return { audio, video: false };
 }
 
 export const CAM_CONSTRAINTS: MediaStreamConstraints = {
@@ -35,12 +42,28 @@ export class LocalMedia {
 
   constructor(private deps: MediaDeps = browserMediaDeps()) {}
 
-  async startMic(): Promise<MediaStreamTrack> {
+  async startMic(cihazId: string | null = null): Promise<MediaStreamTrack> {
     // Zaten acikken yeniden istemek Chrome'da izin balonunu tekrar acabilir.
     if (this.mic) return this.mic;
-    const stream = await this.deps.getUserMedia(micConstraints());
+    const stream = await this.deps.getUserMedia(micConstraints(sesAyarlariOku(), cihazId));
     this.mic = stream.getAudioTracks()[0];
     return this.mic;
+  }
+
+  /**
+   * Acikken BASKA cihaza gecer. Eskiyi BILEREK durdurmaz: cagiran once
+   * replaceTrack ile yeni track'i mesh'e koyar, ANCAK sonra eskisini birakir.
+   * Burada durdurursak iki islem arasinda karsi taraf sessizlik duyar.
+   * Istek patlarsa hicbir sey degismemis olur (startScreen ile ayni kural).
+   */
+  async mikDegistir(
+    cihazId: string | null,
+  ): Promise<{ yeni: MediaStreamTrack; eski: MediaStreamTrack | null }> {
+    const stream = await this.deps.getUserMedia(micConstraints(sesAyarlariOku(), cihazId));
+    const yeni = stream.getAudioTracks()[0];
+    const eski = this.mic;
+    this.mic = yeni;
+    return { yeni, eski };
   }
 
   /**
