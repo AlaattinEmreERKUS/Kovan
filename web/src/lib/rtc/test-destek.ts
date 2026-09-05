@@ -55,8 +55,14 @@ export class SahtePC {
   close() { this.kapandi = true; }
 }
 
+/**
+ * `setSinkId` Chromium 110+ eklentisi; TypeScript'in AudioContext tipinde yok.
+ * Testler sahte ctx uzerinde onu dogrudan okuyabilsin diye tip genisletilir.
+ */
+export type SahteCtx = AudioContext & { setSinkId: ReturnType<typeof vi.fn> };
+
 /** MikrofonIsleyici gercek AudioContext ister; node'da sahtesi verilir. */
-export function sahteCtx() {
+export function sahteCtx(): SahteCtx {
   const dugum = () => ({
     connect: vi.fn(), disconnect: vi.fn(),
     gain: { value: 1, setTargetAtTime: vi.fn() },
@@ -77,7 +83,7 @@ export function sahteCtx() {
       ...dugum(),
       stream: { getAudioTracks: () => [{ kind: "audio", stop: vi.fn(), addEventListener: vi.fn() }] },
     })),
-  } as unknown as AudioContext;
+  } as unknown as SahteCtx;
 }
 
 function sahteTrack(etiket: string) {

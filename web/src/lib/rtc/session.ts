@@ -99,6 +99,9 @@ export class VoiceSession {
       // Devam ettirilmezse AnalyserNode sifir doner (konusma gostergesi olur)
       // ve GainNode zincirinden ses cikmaz (ekran sesi duyulmaz).
       void this.audioCtx.resume().catch(() => {});
+      // Kayitli cikis HEMEN uygulanir; yoksa her katilimda ses varsayilan
+      // hoparlore duserdi.
+      void this.cikisiUygula(this.cihazSecimi.cikis);
       this.speaking = new SpeakingDetector({
         ctx: this.audioCtx,
         onChange: (userId, konusuyor) => {
@@ -263,6 +266,37 @@ export class VoiceSession {
     if (acik && !voice.muted) voice.speaking.add(this.o.selfId);
     else voice.speaking.delete(this.o.selfId);
   };
+
+  async setCikisCihazi(id: string | null): Promise<void> {
+    this.cihazSecimi = { ...this.cihazSecimi, cikis: id };
+    cihazSecimiYaz(this.cihazSecimi);
+    await this.cikisiUygula(id);
+  }
+
+  /**
+   * Uzak sesin TAMAMI (mikrofon mikseri + ekran mikseri) bu tek AudioContext'ten
+   * akiyor, bu yuzden tek cagri hepsini tasir ve gain.ts'e hic dokunulmaz.
+   * Destek yoksa sessizce gecilir; arayuz secimi zaten devre disi cizer.
+   */
+  private async cikisiUygula(id: string | null): Promise<void> {
+    const ctx = this.audioCtx as (AudioContext & {
+      setSinkId?(v: string): Promise<void>;
+    }) | null;
+    if (!ctx || typeof ctx.setSinkId !== "function") return;
+    try {
+      await ctx.setSinkId(id ?? "");   // "" = sistem varsayilani
+      voice.cikisCihazi = id;
+    } catch {
+      // Cihaz kaybolmus olabilir. Sessiz sagirlik yerine varsayilana don.
+      try {
+        await ctx.setSinkId("");
+      } catch {
+        // Varsayilan da reddedildi; yapilacak baska bir sey yok.
+      }
+      voice.cikisCihazi = null;
+      voice.error = "Çıkış cihazına geçilemedi, varsayılana dönüldü.";
+    }
+  }
 
   /**
    * Tercihi kaydeder ve uygular. Uygulanamazsa tercih yine de saklanir:

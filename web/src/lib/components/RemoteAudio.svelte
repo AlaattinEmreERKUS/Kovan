@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { attachStream } from "$lib/rtc/attach";
+  import { attachStream, cikisaBagla } from "$lib/rtc/attach";
   import { voice } from "$lib/voice.svelte";
   const girisler = $derived([...voice.remote.entries()]);
 </script>
@@ -15,7 +15,13 @@
 {#if voice.mikMikseri === null}
   {#each girisler as [userId, tracks] (userId)}
     {#if tracks.mic}
-      <audio data-kovan="yedek" use:attachStream={tracks.mic} autoplay muted={voice.deafened}></audio>
+      <audio
+        data-kovan="yedek"
+        use:attachStream={tracks.mic}
+        use:cikisaBagla={voice.cikisCihazi}
+        autoplay
+        muted={voice.deafened}
+      ></audio>
     {/if}
   {/each}
 {/if}

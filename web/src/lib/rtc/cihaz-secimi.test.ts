@@ -54,3 +54,52 @@ describe("giris cihazi degistirme", () => {
     expect(voice.etkinGiris).toBe("mik-yeni");
   });
 });
+
+describe("cikis cihazi", () => {
+  it("secilen cihaz AudioContext'e uygulanir", async () => {
+    const { session, ctx } = kur();
+    voice.members = [uye("u2")];
+    await session.join();
+
+    await session.setCikisCihazi("kulaklik-1");
+
+    expect(ctx.setSinkId).toHaveBeenCalledWith("kulaklik-1");
+    expect(voice.cikisCihazi).toBe("kulaklik-1");
+  });
+
+  it("null sistem varsayilanina doner", async () => {
+    const { session, ctx } = kur();
+    voice.members = [uye("u2")];
+    await session.join();
+    await session.setCikisCihazi(null);
+    expect(ctx.setSinkId).toHaveBeenCalledWith("");
+  });
+
+  /** Cihaz kaybolmusken secmek sessiz sagirliga yol acmamali. */
+  it("uygulanamazsa varsayilana duser ve hata gosterir", async () => {
+    const { session, ctx } = kur();
+    voice.members = [uye("u2")];
+    await session.join();
+    (ctx.setSinkId as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(new Error("NotFoundError"));
+
+    await session.setCikisCihazi("yok");
+
+    expect(ctx.setSinkId).toHaveBeenLastCalledWith("");
+    expect(voice.cikisCihazi).toBeNull();
+    expect(voice.error).toBeTruthy();
+  });
+
+  it("katilimda kayitli cikis uygulanir", async () => {
+    const { session, ctx } = kur();
+    voice.members = [uye("u2")];
+    await session.join();
+    await session.setCikisCihazi("kulaklik-1");
+    session.leave();
+    (ctx.setSinkId as ReturnType<typeof vi.fn>).mockClear();
+
+    await session.join();
+
+    expect(ctx.setSinkId).toHaveBeenCalledWith("kulaklik-1");
+  });
+});

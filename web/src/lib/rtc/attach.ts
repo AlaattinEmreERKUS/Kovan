@@ -50,3 +50,27 @@ function oynat(node: HTMLMediaElement): void {
   // degil: sessizce birak, bir sonraki update yeniden dener.
   node.play().catch(() => {});
 }
+
+/**
+ * Svelte action: bir media element'ini secili CIKIS cihazina baglar.
+ *
+ * Yalnizca RemoteAudio'nun yedek yolu icin gerekli. Normalde uzak ses
+ * AudioContext'ten akar ve yonlendirme orada yapilir; mikser kurulamadiginda
+ * duyulan TEK yol bu elementlerdir ve onlar kendi baslarina varsayilan
+ * cihaza calar.
+ */
+export function cikisaBagla(node: HTMLMediaElement, cihazId: string | null) {
+  sinkUygula(node, cihazId);
+  return {
+    update(yeni: string | null) {
+      sinkUygula(node, yeni);
+    },
+  };
+}
+
+function sinkUygula(node: HTMLMediaElement, cihazId: string | null): void {
+  const el = node as HTMLMediaElement & { setSinkId?(v: string): Promise<void> };
+  if (typeof el.setSinkId !== "function") return;
+  // Reddedilebilir (cihaz kayboldu, izin yok). Ariza degil: varsayilandan calar.
+  void el.setSinkId(cihazId ?? "").catch(() => {});
+}
