@@ -13,6 +13,8 @@ import { cihazSecimiOku, cihazSecimiYaz, type CihazSecimi } from "../ses-cihazla
 import {
   cihazlariListele, tarayiciCihazDeps, tarayiciCihazOlaylari, type CihazDeps,
 } from "./cihazlar";
+import { BildirimCalar, type Bildirimci } from "./bildirim-sesleri";
+import { uyeFarki } from "./uye-farki";
 
 export interface SessionOptions {
   conn: Connection;
@@ -31,6 +33,8 @@ export interface SessionOptions {
     ekle(tip: string, f: () => void): void;
     kaldir(tip: string, f: () => void): void;
   };
+  /** Katilma/ayrilma/susturma bildirim sesleri. Testte sahtesi verilir. */
+  bildirim?: Bildirimci;
 }
 
 /**
@@ -81,10 +85,20 @@ export class VoiceSession {
   private cihazSecimi: CihazSecimi = cihazSecimiOku();
   private cihazDeps: CihazDeps;
   private cihazDegisti = (): void => { void this.cihazlariGozden(); };
+  private bildirim: Bildirimci;
+  /**
+   * Bir onceki ses kanali uye listesi. `null` = henuz tohumlanmadi; kopma
+   * sonrasi sunucu tam listeyi bastan gonderdigi icin bu ayrim olmadan
+   * odadaki herkes "yeni girdi" sayilir ve bip yagmuru olur.
+   */
+  private oncekiUyeler: string[] | null = null;
 
   constructor(private o: SessionOptions) {
     this.media = o.media ?? new LocalMedia();
     this.cihazDeps = o.cihazDeps ?? tarayiciCihazDeps();
+    this.bildirim = o.bildirim ?? new BildirimCalar({
+      createAudioContext: o.createAudioContext ?? (() => new AudioContext()),
+    });
     o.conn.onVoiceMembers = (members) => this.onMembers(members);
     o.conn.onSignal = (from, data) => this.mesh?.handleSignal(from, data as SignalPayload);
     o.conn.onDisconnect = () => this.kopus();
@@ -96,6 +110,14 @@ export class VoiceSession {
     // ayakta kalabiliyordu; o durumda ikinci join eskisini kapatmadan
     // uzerine yeni bir mesh yaziyor ve tum PC'ler acik siziyordu.
     if (this.mesh) return;
+    // `yenidenKatil` kopma sonrasi buraya geri geliyor ve niyet o zaman ZATEN
+    // true. Ayrimi burada yakalamazsak her ag kesintisinde kullanici kendi
+    // giris bipini yeniden duyar.
+    const yenidenKatilim = this.katilmaNiyeti;
+    // Kayitli tercih burada uygulanir. Yalniz setSesAyarlari'da uygulansaydi,
+    // sesleri kapatmis kullanici ayara dokunana kadar onlari duymaya devam
+    // ederdi.
+    this.bildirim.setAcik(voice.sesAyarlari.bildirimSesleri);
     voice.error = null;
 
     // Mikrofon ARTIK on kosul DEGIL. Onceden burada donuluyordu ve mikrofonunu
@@ -175,8 +197,13 @@ export class VoiceSession {
     this.o.conn.send({ t: "voice.join" });
     // Sunucu yayini gelmeden once bilinen liste uygulanir: hello ile gelen
     // uyeler varsa baglanti hemen kurulmaya baslar.
-    this.mesh.setMembers(voice.members.map((m) => m.userId));
+    // Fark alici burada SESSIZCE tohumlanir. Kopma sonrasi geri katilimda da
+    // buradan gecilir; tohumlanmazsa ilk yayin odadaki herkesi yeni girmis
+    // sayar.
+    this.oncekiUyeler = voice.members.map((m) => m.userId);
+    this.mesh.setMembers(this.oncekiUyeler);
     this.media.setMuted(voice.muted);
+    if (!yenidenKatilim) this.bildirim.cal("kanala-girdim");
   }
 
   leave(): void {
@@ -184,6 +211,7 @@ export class VoiceSession {
     this.katilmaNiyeti = false;
     this.o.conn.send({ t: "voice.leave" });
     this.temizle();
+    this.bildirim.cal("kanaldan-ciktim");
   }
 
   /**
@@ -221,8 +249,9 @@ export class VoiceSession {
 
     void this.join().then(() => {
       if (!voice.joined) return;
-      if (this.niyetDeafened) this.setDeafened(true);
-      else if (this.niyetMuted) this.setMuted(true);
+      // Sessiz: bu onarim, kullanici eylemi degil.
+      if (this.niyetDeafened) this.setDeafened(true, true);
+      else if (this.niyetMuted) this.setMuted(true, true);
     });
   }
 
@@ -379,6 +408,9 @@ export class VoiceSession {
     const ctx = this.audioCtx as (AudioContext & {
       setSinkId?(v: string): Promise<void>;
     }) | null;
+    // Bildirim calarin kendi context'i var; secim ona ayrica bildirilir,
+    // yoksa bipler secili kulakliktan degil varsayilan hoparlorden gelir.
+    void this.bildirim.setCikis(id);
     if (!ctx || typeof ctx.setSinkId !== "function") return;
     try {
       await ctx.setSinkId(id ?? "");   // "" = sistem varsayilani
@@ -453,6 +485,7 @@ export class VoiceSession {
   async setSesAyarlari(a: SesAyarlari): Promise<void> {
     voice.sesAyarlari = a;
     sesAyarlariYaz(a);
+    this.bildirim.setAcik(a.bildirimSesleri);
     this.mikIsleyici?.setEsik(a.esik);
     this.mikIsleyici?.setMod(a.girisModu);
     await this.media.setFiltreler(a);
@@ -463,23 +496,28 @@ export class VoiceSession {
     this.mikIsleyici?.setBasili(basili);
   }
 
-  setMuted(muted: boolean): void {
+  setMuted(muted: boolean, sessiz = false): void {
     if (voice.muted === muted) return;   // kota: degismeyen durum yayilmaz
     voice.muted = muted;
     this.media.setMuted(muted);
+    if (!sessiz) this.bildirim.cal(muted ? "mik-kapandi" : "mik-acildi");
     this.publish();
   }
 
   /** Discord davranisi: deafen kendi mikrofonunu da kapatir. */
-  setDeafened(deafened: boolean): void {
+  setDeafened(deafened: boolean, sessiz = false): void {
     if (voice.deafened === deafened) return;
     voice.deafened = deafened;
     if (deafened) {
+      // DIKKAT: alan dogrudan yaziliyor, `setMuted` cagrilmiyor. Boyle kalmali
+      // -- `this.setMuted(true)`'a cevrilirse tek tikta hem kulaklik hem
+      // mikrofon sesi calar.
       voice.muted = true;
       this.media.setMuted(true);
     }
     this.mixer?.setDeafened(deafened);
     this.micMixer?.setDeafened(deafened);
+    if (!sessiz) this.bildirim.cal(deafened ? "kulaklik-kapandi" : "kulaklik-acildi");
     this.publish();
   }
 
@@ -602,7 +640,17 @@ export class VoiceSession {
 
   private onMembers(members: VoiceMember[]): void {
     if (!this.mesh || !voice.joined) return;
-    this.mesh.setMembers(members.map((m) => m.userId));
+    const idler = members.map((m) => m.userId);
+    const fark = uyeFarki(this.oncekiUyeler, idler, this.o.selfId);
+    this.oncekiUyeler = idler;
+    // Sagirken baskasinin girip cikmasi duyulmaz. Kendi eylem seslerin
+    // (setMuted/setDeafened/join/leave) sagirken de calar; yoksa "kulaligi
+    // actim" sesini hic duyamazdin.
+    if (!voice.deafened) {
+      for (const _ of fark.girenler) this.bildirim.cal("baskasi-girdi");
+      for (const _ of fark.cikanlar) this.bildirim.cal("baskasi-cikti");
+    }
+    this.mesh.setMembers(idler);
   }
 
   private createPeer(userId: string, polite: boolean): Peer {

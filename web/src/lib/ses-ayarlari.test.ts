@@ -81,3 +81,25 @@ describe("giris modu", () => {
     expect(sesAyarlariOku(d).girisModu).toBe("bas-konus");
   });
 });
+
+describe("bildirim sesleri ayari", () => {
+  it("varsayilan olarak aciktir", () => {
+    expect(sesAyarlariOku(depo()).bildirimSesleri).toBe(true);
+  });
+
+  it("kapatilinca kalici olur", () => {
+    const d = depo();
+
+    sesAyarlariYaz({ ...SES_AYARI_VARSAYILAN, bildirimSesleri: false }, d);
+
+    expect(sesAyarlariOku(d).bildirimSesleri).toBe(false);
+  });
+
+  /** Eski kayitta alan yok; okuma patlamamali, varsayilana dusmeli. */
+  it("eski kayitta alan yoksa varsayilana duser", () => {
+    const d = depo();
+    d.setItem("kovan_ses_ayarlari", JSON.stringify({ esik: 0.02 }));
+
+    expect(sesAyarlariOku(d).bildirimSesleri).toBe(true);
+  });
+});
