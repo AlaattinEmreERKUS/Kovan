@@ -215,6 +215,13 @@
     />
     Otomatik seviye
   </label>
+  <label class="satir">
+    <input
+      type="checkbox" checked={a.bildirimSesleri}
+      onchange={(e) => degis({ bildirimSesleri: e.currentTarget.checked })}
+    />
+    Bildirim sesleri
+  </label>
 
   {#if isTauri()}
     <div class="ayirac"></div>

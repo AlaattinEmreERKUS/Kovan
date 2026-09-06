@@ -146,7 +146,15 @@ export function kur() {
   const pcler: SahtePC[] = [];
   const ctx = sahteCtx();
   const ortam = sahteCihazOrtami();
+  /** Calinan bildirim seslerinin sirasi; testler bunu okur. */
+  const sesler: string[] = [];
+  const bildirim = {
+    cal: vi.fn((olay: string) => void sesler.push(olay)),
+    setAcik: vi.fn(),
+    setCikis: vi.fn(async () => {}),
+  };
   const session = new VoiceSession({
+    bildirim: bildirim as never,
     conn: conn as never,
     selfId: "u2",
     apiUrl: "https://api.test",
@@ -165,7 +173,10 @@ export function kur() {
     },
     cihazOlaylari: ortam.olaylar,
   });
-  return { session, conn, deps, pcler, ctx, uretilen, cihazlar: ortam, olaylar: ortam.olaylar };
+  return {
+    session, conn, deps, pcler, ctx, uretilen,
+    cihazlar: ortam, olaylar: ortam.olaylar, bildirim, sesler,
+  };
 }
 
 export const uye = (userId: string) => ({

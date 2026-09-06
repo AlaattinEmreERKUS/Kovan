@@ -12,6 +12,8 @@ export interface SesAyarlari {
   otomatikSeviye: boolean;
   /** Kapiyi ne kumanda eder. Bas-konus yalniz masaustunde secilebilir. */
   girisModu: GirisModu;
+  /** Katilma/ayrilma/susturma bildirim sesleri calsin mi. */
+  bildirimSesleri: boolean;
 }
 
 export const ESIK_MAKS = 0.1;
@@ -23,6 +25,7 @@ export const SES_AYARI_VARSAYILAN: SesAyarlari = {
   gurultuBastirma: true,
   otomatikSeviye: true,
   girisModu: GIRIS_MODU_VARSAYILAN,
+  bildirimSesleri: true,
 };
 
 const ANAHTAR = "kovan_ses_ayarlari";
@@ -67,6 +70,7 @@ export function sesAyarlariOku(depo: DepoBenzeri | null = varsayilanDepo()): Ses
       gurultuBastirma: bayrak(o.gurultuBastirma, SES_AYARI_VARSAYILAN.gurultuBastirma),
       otomatikSeviye: bayrak(o.otomatikSeviye, SES_AYARI_VARSAYILAN.otomatikSeviye),
       girisModu: mod(o.girisModu),
+      bildirimSesleri: bayrak(o.bildirimSesleri, SES_AYARI_VARSAYILAN.bildirimSesleri),
     };
   } catch {
     // Bozuk ya da okunamayan kayit ayarlari sifirlar, uygulamayi durdurmaz.
