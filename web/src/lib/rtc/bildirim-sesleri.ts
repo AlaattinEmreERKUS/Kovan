@@ -8,25 +8,50 @@ export type BildirimOlayi =
   | "kulaklik-kapandi"
   | "kulaklik-acildi";
 
-/** Tek nota: frekans (Hz) ve suresi (saniye). */
+/** Tek nota: frekans (Hz), suresi (saniye), ve tepe seviyenin carpani. */
 interface Nota {
   hz: number;
   sure: number;
+  /** 1 = tam tepe. Baskasinin olaylari kisik calsin diye var. */
+  ses?: number;
 }
+
+/**
+ * C major pentatonik. Frekanslari elle yazmak yerine dereceden secmek,
+ * yeni bir olay eklendiginde tablonun kendiyle uyumlu kalmasini saglar:
+ * pentatonikte hangi iki dereceyi yan yana koyarsan koy uyumsuz duyulmaz.
+ */
+const N = {
+  G4: 392.0,
+  C5: 523.25,
+  D5: 587.33,
+  E5: 659.25,
+  G5: 783.99,
+  A5: 880.0,
+} as const;
+
+/** Zarf: ani baslatma "tik" yapar (ses-testi.ts'te ayni sorun ayni cozumle). */
+const ATAK_SN = 0.012;
+/** Nota bittikten sonraki sonum. Uzun kuyruk sesi "cirpma" degil "can" yapar. */
+const KUYRUK_SN = 0.18;
+/** Tepe kazanc. 1.0 (GainNode varsayilani) kulakta acitacak kadar yuksek. */
+const ZIRVE = 0.12;
+/** Sinus: harmonik yok, dolayisiyla tiz batmasi da yok. */
+const DALGA: OscillatorType = "sine";
 
 /**
  * Sesler burada VERI olarak durur, kod olarak degil. Ileride hazir ses
  * dosyalarina gecilirse degisen tek yer bu tablo ve `cal` govdesidir.
  */
 export const SES_TABLOSU: Record<BildirimOlayi, Nota[]> = {
-  "kanala-girdim": [{ hz: 440, sure: 0.08 }, { hz: 660, sure: 0.1 }],
-  "kanaldan-ciktim": [{ hz: 660, sure: 0.08 }, { hz: 440, sure: 0.1 }],
-  "baskasi-girdi": [{ hz: 520, sure: 0.06 }, { hz: 520, sure: 0.06 }],
-  "baskasi-cikti": [{ hz: 390, sure: 0.06 }, { hz: 390, sure: 0.06 }],
-  "mik-kapandi": [{ hz: 300, sure: 0.07 }],
-  "mik-acildi": [{ hz: 500, sure: 0.07 }],
-  "kulaklik-kapandi": [{ hz: 300, sure: 0.07 }, { hz: 220, sure: 0.09 }],
-  "kulaklik-acildi": [{ hz: 220, sure: 0.07 }, { hz: 400, sure: 0.09 }],
+  "kanala-girdim": [{ hz: N.C5, sure: 0.09 }, { hz: N.G5, sure: 0.11 }],
+  "kanaldan-ciktim": [{ hz: N.G5, sure: 0.09 }, { hz: N.C5, sure: 0.11 }],
+  "baskasi-girdi": [{ hz: N.E5, sure: 0.07, ses: 0.6 }, { hz: N.A5, sure: 0.09, ses: 0.6 }],
+  "baskasi-cikti": [{ hz: N.A5, sure: 0.07, ses: 0.6 }, { hz: N.E5, sure: 0.09, ses: 0.6 }],
+  "mik-kapandi": [{ hz: N.G4, sure: 0.09 }],
+  "mik-acildi": [{ hz: N.D5, sure: 0.09 }],
+  "kulaklik-kapandi": [{ hz: N.D5, sure: 0.07 }, { hz: N.G4, sure: 0.1 }],
+  "kulaklik-acildi": [{ hz: N.G4, sure: 0.07 }, { hz: N.D5, sure: 0.1 }],
 };
 
 export interface BildirimDeps {
@@ -77,16 +102,40 @@ export class BildirimCalar {
     const ctx = (this.ctx ??= this.o.createAudioContext());
     if (!ctx) return;
 
-    let an = ctx.currentTime;
+    // Kucuk gecikme: `currentTime` gecmis olabilir, zamanlanan zarf o zaman
+    // ilk noktasini atlar ve nota yine dik kenarla baslar.
+    let an = ctx.currentTime + 0.02;
     for (const nota of SES_TABLOSU[olay]) {
-      const osc = ctx.createOscillator();
-      const kazanc = ctx.createGain();
-      osc.frequency.value = nota.hz;
-      osc.connect(kazanc);
-      kazanc.connect(ctx.destination);
-      osc.start(an);
-      osc.stop(an + nota.sure);
+      this.nota(ctx, nota, an);
       an += nota.sure;
     }
+  }
+
+  /**
+   * Tek notayi zarfla calar. Zarf sussuz degil ZORUNLU: osilatoru ciplak
+   * baglayip `stop` ile kesmek dalgayi dik kenardan koparir, kulak bunu
+   * tonun kendisi olarak degil "klik" olarak duyar.
+   *
+   * Notalar kuyruklari boyunca ust uste biner; ardisik notalar arasindaki
+   * sessizligi kaldiran sey budur.
+   */
+  private nota(ctx: AudioContext, nota: Nota, basla: number): void {
+    const osc = ctx.createOscillator();
+    const kazanc = ctx.createGain();
+    osc.type = DALGA;
+    osc.frequency.value = nota.hz;
+
+    // `exponentialRampToValueAtTime` sifiri kabul etmez; 0.0001 (-80 dB)
+    // pratikte sessizlik.
+    const zirve = ZIRVE * (nota.ses ?? 1);
+    const biter = basla + nota.sure + KUYRUK_SN;
+    kazanc.gain.setValueAtTime(0.0001, basla);
+    kazanc.gain.exponentialRampToValueAtTime(zirve, basla + ATAK_SN);
+    kazanc.gain.exponentialRampToValueAtTime(0.0001, biter);
+
+    osc.connect(kazanc);
+    kazanc.connect(ctx.destination);
+    osc.start(basla);
+    osc.stop(biter + 0.02);
   }
 }

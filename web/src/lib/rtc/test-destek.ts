@@ -94,7 +94,13 @@ export type SahteCtx = AudioContext & { setSinkId: ReturnType<typeof vi.fn> };
 export function sahteCtx(): SahteCtx {
   const dugum = () => ({
     connect: vi.fn(), disconnect: vi.fn(),
-    gain: { value: 1, setTargetAtTime: vi.fn() },
+    // Bildirim calarinin zarfi rampa cagirir; sahte AudioParam onlari da tanimali.
+    gain: {
+      value: 1,
+      setTargetAtTime: vi.fn(),
+      setValueAtTime: vi.fn(),
+      exponentialRampToValueAtTime: vi.fn(),
+    },
     getFloatTimeDomainData: vi.fn(), fftSize: 2048,
   });
   return {
