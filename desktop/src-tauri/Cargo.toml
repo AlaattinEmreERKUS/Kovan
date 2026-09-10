@@ -20,3 +20,6 @@ serde_json = "1"
 [target."cfg(not(any(target_os = \"android\", target_os = \"ios\")))".dependencies]
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-single-instance = "2"
+# Yalniz RUST tarafindan kullanilir (linkleri sistem tarayicisinda acmak).
+# capabilities/default.json'a opener izni EKLENMEZ: uzak sayfa cagiramaz (R8).
+tauri-plugin-opener = "2"

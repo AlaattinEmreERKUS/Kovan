@@ -16,6 +16,8 @@ use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
 #[cfg(desktop)]
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
+#[cfg(desktop)]
+use tauri_plugin_opener::OpenerExt;
 
 #[derive(Clone, serde::Serialize)]
 struct KisayolOlayi {
@@ -117,6 +119,14 @@ fn mikrofon_etiketi(app: tauri::AppHandle, muted: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// Sayfanin actirmak istedigi yeni pencere (`target="_blank"`, `window.open`)
+/// sistem tarayicisina gidebilir mi. Yalniz http(s): uzak sayfa ele gecirilse
+/// bile yerel dosya, ayar ekrani ya da baska bir uygulama tetiklenemez (R8).
+/// Uzak sayfaya bunun icin IPC izni ACILMAZ; karar tamamen burada.
+fn disari_acilabilir(adres: &tauri::Url) -> bool {
+    matches!(adres.scheme(), "http" | "https")
+}
+
 /// Uzak sayfa bir kez yuklendi mi. Ag yokken WebView2'nin kendi ingilizce
 /// hata sayfasinda kalinmasin diye (R10) sureyi bu bayrak olcuyor.
 static SAYFA_YUKLENDI: AtomicBool = AtomicBool::new(false);
@@ -148,6 +158,9 @@ pub fn run() {
                 let _ = p.set_focus();
             }
         }));
+
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_opener::init());
 
     #[cfg(desktop)]
     let builder = builder.plugin(
@@ -185,6 +198,33 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            // Ana pencere config'ten ama BURADA kurulur ("create": false):
+            // on_new_window yalniz builder'da tanimlanabiliyor. WebView2
+            // `target="_blank"` linkte yeni pencere ister; islemeyici yokken
+            // istek yutuluyor ve linke tiklamak hicbir sey yapmiyordu.
+            // Uygulama icinde ASLA pencere acilmaz: http(s) sistem
+            // tarayicisina gider, gerisi sessizce reddedilir.
+            let ayar = app
+                .config()
+                .app
+                .windows
+                .iter()
+                .find(|w| w.label == "main")
+                .cloned()
+                .expect("main pencere ayari");
+            let acici = app.handle().clone();
+            tauri::WebviewWindowBuilder::from_config(app.handle(), &ayar)?
+                .on_new_window(move |adres, _ozellikler| {
+                    #[cfg(desktop)]
+                    if disari_acilabilir(&adres) {
+                        let _ = acici.opener().open_url(adres.as_str(), None::<&str>);
+                    }
+                    #[cfg(not(desktop))]
+                    let _ = (&acici, &adres);
+                    tauri::webview::NewWindowResponse::Deny
+                })
+                .build()?;
+
             // Uzak sayfada hata ayiklamanin tek yolu konsol; elle aranmasin.
             // Yalniz hata ayiklama derlemesinde, surum derlemesinde blok yok.
             #[cfg(debug_assertions)]
@@ -257,4 +297,35 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![kisayollari_ayarla, mikrofon_etiketi])
         .run(tauri::generate_context!())
         .expect("Kovan baslatilamadi");
+}
+
+#[cfg(test)]
+mod testler {
+    use super::disari_acilabilir;
+    use tauri::Url;
+
+    fn acilir(adres: &str) -> bool {
+        disari_acilabilir(&Url::parse(adres).expect("gecerli adres"))
+    }
+
+    #[test]
+    fn http_ve_https_sistem_tarayicisinda_acilir() {
+        assert!(acilir("https://example.com/yol?x=1"));
+        assert!(acilir("http://example.com"));
+    }
+
+    /// Uzak sayfa ele gecirilse bile window.open ile yerel dosya, ayar
+    /// ekrani ya da baska bir uygulama tetiklenemesin (R8).
+    #[test]
+    fn diger_semalar_reddedilir() {
+        for adres in [
+            "file:///C:/Windows/System32/calc.exe",
+            "ms-settings:privacy",
+            "javascript:alert(1)",
+            "mailto:biri@example.com",
+            "kovan://localhost/hata",
+        ] {
+            assert!(!acilir(adres), "{adres} acilmamali");
+        }
+    }
 }
