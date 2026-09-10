@@ -520,6 +520,113 @@ describe("VoiceSession ekran kaynagi degistirme", () => {
   });
 });
 
+describe("VoiceSession ekran kalitesi", () => {
+  // Tercih resetVoice ile SIFIRLANMAZ (kanaldan cikinca kaybolmamali); testler
+  // arasi sizmasin diye burada elle varsayilana cekilir.
+  beforeEach(() => { voice.ekranKalitesi = { cozunurluk: "kaynak", fps: 30 }; });
+
+  function medyaSahtele(session: unknown) {
+    const s = session as {
+      media: { startScreen: ReturnType<typeof vi.fn>; ekranKalitesiUygula: ReturnType<typeof vi.fn> };
+    };
+    s.media.startScreen = vi.fn(async () => ({ video: sahteTrack("video"), audio: null }));
+    s.media.ekranKalitesiUygula = vi.fn(async () => {});
+    return s.media;
+  }
+
+  it("paylasim secili kaliteyle baslar", async () => {
+    const { session } = kur();
+    await session.join();
+    const media = medyaSahtele(session);
+    voice.ekranKalitesi = { cozunurluk: "720p", fps: 60 };
+
+    await session.startScreen();
+
+    expect(media.startScreen).toHaveBeenCalledWith({ cozunurluk: "720p", fps: 60 });
+  });
+
+  it("kaynak degistirilince yeni yuzey de ayni kaliteyle gelir", async () => {
+    const { session } = kur();
+    await session.join();
+    const media = medyaSahtele(session);
+    await session.startScreen();
+    voice.ekranKalitesi = { cozunurluk: "1080p", fps: 15 };
+
+    await session.degistirEkran();
+
+    expect(media.startScreen).toHaveBeenLastCalledWith({ cozunurluk: "1080p", fps: 15 });
+  });
+
+  it("paylasim SURERKEN secim canli track'e uygulanir ve store'a yazilir", async () => {
+    const { session } = kur();
+    await session.join();
+    const media = medyaSahtele(session);
+    await session.startScreen();
+
+    await session.setEkranKalitesi({ cozunurluk: "720p", fps: 60 });
+
+    expect(media.ekranKalitesiUygula).toHaveBeenCalledWith({ cozunurluk: "720p", fps: 60 });
+    expect(voice.ekranKalitesi).toEqual({ cozunurluk: "720p", fps: 60 });
+    expect(voice.screen).toBe(true);
+  });
+
+  /** Yerel bir tercih: izleyiciye bayrak ya da mesaj gitmez. */
+  it("kalite degisikligi sunucuya hicbir sey gondermez", async () => {
+    const { session, gonderilen } = kur();
+    await session.join();
+    medyaSahtele(session);
+    await session.startScreen();
+    const once = gonderilen.length;
+
+    await session.setEkranKalitesi({ cozunurluk: "1080p", fps: 30 });
+
+    expect(gonderilen).toHaveLength(once);
+  });
+
+  it("paylasim yokken secim yalniz tercih olarak saklanir", async () => {
+    const { session } = kur();
+    await session.join();
+    medyaSahtele(session);
+
+    await session.setEkranKalitesi({ cozunurluk: "720p", fps: 15 });
+
+    expect(voice.ekranKalitesi).toEqual({ cozunurluk: "720p", fps: 15 });
+    expect(voice.error).toBeNull();
+  });
+
+  /**
+   * Menu o an GERCEKTEN gecerli olani gostermeli. Kisit tutmadiysa yakalama
+   * eski ayarla suruyor; store yeni degeri gosterirse menu yalan soyler.
+   */
+  it("uygulama patlarsa tercih eski kalir ve hata gosterilir", async () => {
+    const { session } = kur();
+    await session.join();
+    const media = medyaSahtele(session);
+    await session.startScreen();
+    media.ekranKalitesiUygula.mockRejectedValueOnce(new DOMException("olmaz", "OverconstrainedError"));
+
+    await session.setEkranKalitesi({ cozunurluk: "720p", fps: 60 });
+
+    expect(voice.ekranKalitesi).toEqual({ cozunurluk: "kaynak", fps: 30 });
+    expect(voice.error).not.toBeNull();
+    expect(voice.screen).toBe(true);
+  });
+
+  it("istatistik izleyici basina doner; kanalda degilken bos", async () => {
+    const { session, conn } = kur();
+    expect(await session.ekranIstatistikleri()).toEqual([]);
+    await session.join();
+    conn.onVoiceMembers!([{ userId: "u1" }, { userId: "u2" }]);
+    expect(await session.ekranIstatistikleri()).toEqual([{ userId: "u1", giden: null }]);
+  });
+
+  it("kanaldan cikmak tercihi silmez", () => {
+    voice.ekranKalitesi = { cozunurluk: "1080p", fps: 60 };
+    resetVoice();
+    expect(voice.ekranKalitesi).toEqual({ cozunurluk: "1080p", fps: 60 });
+  });
+});
+
 describe("VoiceSession bas-konus", () => {
   it("setPttBasili isleyiciye tasinir", async () => {
     const { session } = kur();

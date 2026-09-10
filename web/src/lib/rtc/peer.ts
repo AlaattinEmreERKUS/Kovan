@@ -11,6 +11,15 @@ const SLOT_KIND: Record<TrackSlot, "audio" | "video"> = {
   mic: "audio", cam: "video", screenVideo: "video", screenAudio: "audio",
 };
 
+/** Giden ekran akisinin GERCEK durumu; secilen kalite yalniz tavandir. */
+export interface EkranOzeti {
+  genislik: number | null;
+  yukseklik: number | null;
+  fps: number | null;
+  /** "none" | "bandwidth" | "cpu" | "other": encoder neden secimin altinda. */
+  sinir: string | null;
+}
+
 export interface SignalPayload {
   description?: RTCSessionDescriptionInit;
   candidate?: RTCIceCandidateInit | null;
@@ -173,6 +182,31 @@ export class Peer {
     });
     for (const [slot, track] of this.pending) {
       void this.senders.get(slot)?.replaceTrack(track);
+    }
+  }
+
+  /**
+   * Yalniz OKUR, negotiation'a dokunmaz. Teshis araci oldugu icin hicbir
+   * kosulda hata firlatmaz: paylasim yoksa, sender henuz yoksa (polite taraf,
+   * adopt oncesi) ya da encoder ilk kareyi uretmediyse null doner.
+   */
+  async ekranIstatistigi(): Promise<EkranOzeti | null> {
+    const sender = this.senders.get("screenVideo");
+    if (!sender?.track) return null;
+    try {
+      const rapor = await sender.getStats();
+      for (const s of rapor.values()) {
+        if (s.type !== "outbound-rtp" || s.kind !== "video") continue;
+        return {
+          genislik: s.frameWidth ?? null,
+          yukseklik: s.frameHeight ?? null,
+          fps: s.framesPerSecond ?? null,
+          sinir: s.qualityLimitationReason ?? null,
+        };
+      }
+      return null;
+    } catch {
+      return null;
     }
   }
 

@@ -18,6 +18,7 @@ export function bosTracks(): RemoteTracks {
 
 import type { RemoteAudioMixer } from "./rtc/gain";
 import { sesAyarlariOku, type SesAyarlari } from "./ses-ayarlari";
+import { ekranKalitesiOku, type EkranKalitesi } from "./ekran-kalitesi";
 import type { YerelTracks } from "./stage";
 export type { YerelTracks };
 
@@ -88,6 +89,11 @@ export const voice = $state({
   girisTercihi: null as string | null,
   cikisTercihi: null as string | null,
   sesAyarlari: sesAyarlariOku() as SesAyarlari,
+  /**
+   * Ekran paylasimi kalite TERCIHI. sesAyarlari gibi kalicidir ve resetVoice
+   * ile sifirlanmaz: kanaldan cikip girince menu ayni secimi gostermeli.
+   */
+  ekranKalitesi: ekranKalitesiOku() as EkranKalitesi,
 });
 
 /** Sunucuya gonderilecek bayrak paketi. voice.state govdesiyle birebir. */

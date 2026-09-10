@@ -64,6 +64,9 @@ export const IKONLAR = {
   "kanal-ses":
     '<path d="M12.2 4.2 7.6 8H4.4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h3.2l4.6 3.8a1 1 0 0 0 1.6-.8V5a1 1 0 0 0-1.6-.8Z" fill="currentColor"/>' +
     '<path d="M17.4 9a4.2 4.2 0 0 1 0 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  // Bolunmus dugmenin menu oku. Menu cubugun USTUNDE acildigi icin yukari bakar.
+  "ok-yukari":
+    '<path d="M11.2 8.4a1 1 0 0 1 1.6 0l4.6 6a1 1 0 0 1-.8 1.6H7.4a1 1 0 0 1-.8-1.6l4.6-6Z" fill="currentColor"/>',
 } as const;
 
 export type IkonAdi = keyof typeof IKONLAR;

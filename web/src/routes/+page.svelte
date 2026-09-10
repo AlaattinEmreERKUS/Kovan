@@ -164,6 +164,16 @@
       // Tarayici filtreleri GERCEKTEN uygulandi mi: istedigimiz kisit ile
       // cihazin verdigi ayar farkli olabilir.
       mikrofonAyari: oturum?.mikAyari() ?? null,
+      // Secilen kalite TAVANDIR; gercekte gideni `kovanEkran()` gosterir.
+      ekranKalitesi: voice.ekranKalitesi,
+    });
+    // getStats asenkron; kovanDurum() senkron kalsin diye AYRI kanca.
+    // Paylasan kisi konsola `await kovanEkran()` yazar: her izleyiciye giden
+    // cozunurluk, fps ve encoder'in neden secimin altinda kaldigi (sinir).
+    (window as unknown as { kovanEkran?: unknown }).kovanEkran = async () => ({
+      secilen: voice.ekranKalitesi,
+      yakalanan: voice.local.screenVideo?.getSettings() ?? null,
+      izleyiciler: await (oturum?.ekranIstatistikleri() ?? Promise.resolve([])),
     });
   });
 
@@ -230,6 +240,7 @@
         onToggleDeafen={() => oturum?.setDeafened(!voice.deafened)}
         onToggleCamera={() => void oturum?.setCamera(!voice.camera)}
         onToggleScreen={() => void ekranDugmesi()}
+        onEkranKalitesi={(k) => void oturum?.setEkranKalitesi(k)}
         onSesAyari={(a) => void oturum?.setSesAyarlari(a)}
         onGirisCihazi={(id) => void oturum?.setGirisCihazi(id)}
         onCikisCihazi={(id) => void oturum?.setCikisCihazi(id)}

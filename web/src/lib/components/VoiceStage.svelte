@@ -4,6 +4,7 @@
   import { sahneDuzeni } from "$lib/stage";
   import { izgaraOlcusu } from "$lib/izgara";
   import type { SesAyarlari } from "$lib/ses-ayarlari";
+  import type { EkranKalitesi } from "$lib/ekran-kalitesi";
   import type { KayitSonucu } from "$lib/kisayollar";
   import { gorunumOku, gorunumYaz, type GorunumModu } from "$lib/gorunum";
   import StageTile from "./StageTile.svelte";
@@ -12,7 +13,8 @@
 
   let {
     selfId, kisayolSonuclari,
-    onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen, onSesAyari,
+    onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen, onEkranKalitesi,
+    onSesAyari,
     onGirisCihazi, onCikisCihazi, onBip, onGeriDinlemeBasla, onGeriDinlemeBitir,
     onLeave,
   }: {
@@ -22,6 +24,7 @@
     onToggleDeafen: () => void;
     onToggleCamera: () => void;
     onToggleScreen: () => void;
+    onEkranKalitesi: (k: EkranKalitesi) => void;
     onSesAyari: (a: SesAyarlari) => void;
     onGirisCihazi: (id: string | null) => void;
     onCikisCihazi: (id: string | null) => void;
@@ -129,6 +132,7 @@
     {onToggleDeafen}
     {onToggleCamera}
     {onToggleScreen}
+    {onEkranKalitesi}
     {onSesAyari}
     {onGirisCihazi}
     {onCikisCihazi}

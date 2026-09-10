@@ -3,14 +3,28 @@
   import type { GorunumModu } from "$lib/gorunum";
   import Icon from "./Icon.svelte";
   import SesAyarlariPanel from "./SesAyarlari.svelte";
+  import EkranKalitesiMenu from "./EkranKalitesiMenu.svelte";
   import type { SesAyarlari } from "$lib/ses-ayarlari";
+  import type { EkranKalitesi } from "$lib/ekran-kalitesi";
   import type { KayitSonucu } from "$lib/kisayollar";
 
   let ayarlarAcik = $state(false);
+  let kaliteAcik = $state(false);
+  let ekranSarmal: HTMLDivElement | undefined = $state();
+
+  // Menu kucuk ve sik acilir: kapatma dugmesi yerine disari tiklama ve Esc.
+  // Ok dugmesi sarmalin ICINDE; yoksa pointerdown kapatir, click geri acardi.
+  function disariTik(e: PointerEvent) {
+    if (kaliteAcik && ekranSarmal && !ekranSarmal.contains(e.target as Node)) kaliteAcik = false;
+  }
+  function tus(e: KeyboardEvent) {
+    if (e.key === "Escape") kaliteAcik = false;
+  }
 
   let {
     mod, kisayolSonuclari,
     onToggleMute, onToggleDeafen, onToggleCamera, onToggleScreen, onToggleGorunum,
+    onEkranKalitesi,
     onSesAyari, onGirisCihazi, onCikisCihazi, onBip,
     onGeriDinlemeBasla, onGeriDinlemeBitir, onLeave,
   }: {
@@ -21,6 +35,7 @@
     onToggleCamera: () => void;
     onToggleScreen: () => void;
     onToggleGorunum: () => void;
+    onEkranKalitesi: (k: EkranKalitesi) => void;
     onSesAyari: (a: SesAyarlari) => void;
     onGirisCihazi: (id: string | null) => void;
     onCikisCihazi: (id: string | null) => void;
@@ -30,6 +45,8 @@
     onLeave: () => void;
   } = $props();
 </script>
+
+<svelte:window onpointerdown={disariTik} onkeydown={tus} />
 
 <div class="cubuk">
   <div class="medya">
@@ -54,12 +71,28 @@
       onclick={onToggleCamera}
     ><Icon ad={voice.camera ? "kamera" : "kamera-kapali"} /></button>
 
-    <button
-      class="dugme"
-      class:acik={voice.screen}
-      aria-label={voice.screen ? "Ekran paylaşımını durdur" : "Ekran paylaş"}
-      onclick={onToggleScreen}
-    ><Icon ad="ekran" /></button>
+    <!--
+      Bolunmus dugme: ikon paylasimi acar/kapatir, ok kalite menusunu.
+      Menu paylasim SURERKEN de burada; secim canli uygulanir.
+    -->
+    <div class="ekranSarmal" bind:this={ekranSarmal}>
+      <button
+        class="dugme"
+        class:acik={voice.screen}
+        aria-label={voice.screen ? "Ekran paylaşımını durdur" : "Ekran paylaş"}
+        onclick={onToggleScreen}
+      ><Icon ad="ekran" /></button>
+      <button
+        class="dugme ok"
+        class:acik={kaliteAcik}
+        aria-label="Ekran kalitesi"
+        aria-expanded={kaliteAcik}
+        onclick={() => (kaliteAcik = !kaliteAcik)}
+      ><Icon ad="ok-yukari" boyut={14} /></button>
+      {#if kaliteAcik}
+        <EkranKalitesiMenu onSec={onEkranKalitesi} />
+      {/if}
+    </div>
   </div>
 
   <div class="sag">
@@ -99,6 +132,8 @@
 <style>
   /* Panel cubugun USTUNDE acilir; sarmal konumlandirmayi tasir. */
   .ayarSarmal { position: relative; display: flex; }
+  .ekranSarmal { position: relative; display: flex; }
+  .dugme.ok { width: 18px; }
 
   .cubuk {
     display: flex; align-items: center; gap: 6px;

@@ -1,4 +1,4 @@
-import type { Peer, SignalPayload, TrackSlot } from "./peer";
+import type { EkranOzeti, Peer, SignalPayload, TrackSlot } from "./peer";
 import { isPolite } from "./politeness";
 
 export interface MeshDeps {
@@ -48,6 +48,13 @@ export class Mesh {
 
   setIceServers(iceServers: RTCIceServer[]): void {
     for (const peer of this.peers.values()) peer.setIceServers(iceServers);
+  }
+
+  /** Her izleyiciye AYRI encode gider; kalitesi de izleyici basina ayridir. */
+  async ekranIstatistikleri(): Promise<Array<{ userId: string; giden: EkranOzeti | null }>> {
+    return Promise.all([...this.peers].map(async ([userId, peer]) => ({
+      userId, giden: await peer.ekranIstatistigi(),
+    })));
   }
 
   has(userId: string): boolean {

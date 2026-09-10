@@ -253,3 +253,73 @@ describe("ICE kurtarma", () => {
     expect(durumlar).toContain("failed");
   });
 });
+
+/**
+ * Kalite secimi bir TAVAN; encoder upload ya da CPU yetmezse altina iner.
+ * Gercekte gideni gostermezsek menu "1080p" der, izleyici 540p gorur ve kimse
+ * nedenini bilemez.
+ */
+describe("Peer ekran istatistigi", () => {
+  /** 2. transceiver screenVideo yuvasi (SLOT_ORDER). */
+  function ekranSender(pc: SahtePC) {
+    return pc.transceivers[SLOT_ORDER.indexOf("screenVideo")].sender as unknown as {
+      track: MediaStreamTrack | null;
+      getStats: ReturnType<typeof vi.fn>;
+    };
+  }
+
+  function rapor(...girdiler: Array<Record<string, unknown>>) {
+    return new Map(girdiler.map((g, i) => [`s${i}`, g]));
+  }
+
+  it("paylasim suruyorsa giden cozunurluk, fps ve kisit sebebini verir", async () => {
+    const { pc, peer } = kur(false);
+    const s = ekranSender(pc);
+    s.track = { kind: "video" } as MediaStreamTrack;
+    s.getStats = vi.fn(async () => rapor(
+      { type: "codec", mimeType: "video/VP8" },
+      {
+        type: "outbound-rtp", kind: "video",
+        frameWidth: 1280, frameHeight: 720, framesPerSecond: 59,
+        qualityLimitationReason: "cpu",
+      },
+    ));
+
+    expect(await peer.ekranIstatistigi()).toEqual({
+      genislik: 1280, yukseklik: 720, fps: 59, sinir: "cpu",
+    });
+  });
+
+  it("ekran paylasilmiyorsa null", async () => {
+    const { pc, peer } = kur(false);
+    const s = ekranSender(pc);
+    s.track = null;
+    s.getStats = vi.fn();
+    expect(await peer.ekranIstatistigi()).toBeNull();
+    expect(s.getStats).not.toHaveBeenCalled();
+  });
+
+  /** Polite tarafta sender'lar offer gelene kadar yok (adopt). */
+  it("sender henuz yoksa null, patlamaz", async () => {
+    const { peer } = kur(true);
+    expect(await peer.ekranIstatistigi()).toBeNull();
+  });
+
+  /** Encoder ilk kareyi uretmeden once rapor bos gelir. */
+  it("outbound-rtp yoksa null", async () => {
+    const { pc, peer } = kur(false);
+    const s = ekranSender(pc);
+    s.track = { kind: "video" } as MediaStreamTrack;
+    s.getStats = vi.fn(async () => rapor({ type: "codec" }));
+    expect(await peer.ekranIstatistigi()).toBeNull();
+  });
+
+  /** Teshis araci hicbir kosulda hata firlatmamali: ciktisi hatanin kaniti. */
+  it("getStats patlarsa null", async () => {
+    const { pc, peer } = kur(false);
+    const s = ekranSender(pc);
+    s.track = { kind: "video" } as MediaStreamTrack;
+    s.getStats = vi.fn(async () => { throw new Error("kapandi"); });
+    expect(await peer.ekranIstatistigi()).toBeNull();
+  });
+});

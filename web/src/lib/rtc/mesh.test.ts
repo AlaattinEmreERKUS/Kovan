@@ -92,4 +92,20 @@ describe("Mesh", () => {
     expect(olusturulan.get("u1")!.close).toHaveBeenCalled();
     expect(mesh.size).toBe(0);
   });
+
+  /** Mesh'te her izleyiciye AYRI encode gider; her birinin kalitesi ayridir. */
+  it("ekran istatistigini izleyici basina toplar", async () => {
+    const { mesh, olusturulan } = kur("u2");
+    mesh.setMembers(["u1", "u2", "u3"]);
+    const ozet = { genislik: 1920, yukseklik: 1080, fps: 30, sinir: "none" };
+    Object.assign(olusturulan.get("u1")!, { ekranIstatistigi: vi.fn(async () => ozet) });
+    Object.assign(olusturulan.get("u3")!, { ekranIstatistigi: vi.fn(async () => null) });
+
+    const sonuc = await mesh.ekranIstatistikleri();
+
+    expect(sonuc).toEqual([
+      { userId: "u1", giden: ozet },
+      { userId: "u3", giden: null },
+    ]);
+  });
 });

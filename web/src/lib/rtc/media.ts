@@ -1,5 +1,8 @@
 import { buildConstraints } from "./share";
 import { mikKisitlari, sesAyarlariOku, type SesAyarlari } from "../ses-ayarlari";
+import {
+  EKRAN_KALITESI_VARSAYILAN, ekranKisitlari, icerikIpucu, type EkranKalitesi,
+} from "../ekran-kalitesi";
 
 export interface MediaDeps {
   getUserMedia(c: MediaStreamConstraints): Promise<MediaStream>;
@@ -103,8 +106,10 @@ export class LocalMedia {
    * Native secici acilir (secici DEGISTIRILEMEZ, spec 8.1 kisit 1). Yuzey ve
    * sistem sesi secimi orada yapilir; kendi on-diyalogumuz yok (share.ts).
    */
-  async startScreen(): Promise<{ video: MediaStreamTrack; audio: MediaStreamTrack | null }> {
-    const stream = await this.deps.getDisplayMedia(buildConstraints());
+  async startScreen(
+    k: EkranKalitesi = EKRAN_KALITESI_VARSAYILAN,
+  ): Promise<{ video: MediaStreamTrack; audio: MediaStreamTrack | null }> {
+    const stream = await this.deps.getDisplayMedia(buildConstraints(k));
     // Paylasim SURERKEN kaynak degistirilebilir. Eskiyi ancak yeni akis
     // GELDIKTEN sonra birakiyoruz: once biraksaydik secicide vazgecen
     // kullanici paylasimini komple kaybederdi. Birakmasaydik da eski
@@ -112,10 +117,26 @@ export class LocalMedia {
     this.screenVideo?.stop();
     this.screenAudio?.stop();
     this.screenVideo = stream.getVideoTracks()[0];
+    this.screenVideo.contentHint = icerikIpucu(k);
     // Ses kutusu native secicide isaretlenmemis olabilir; o zaman audio
     // track hic gelmez ve serit "sistem sesi acik" yazmaz.
     this.screenAudio = stream.getAudioTracks()[0] ?? null;
     return { video: this.screenVideo, audio: this.screenAudio };
+  }
+
+  /**
+   * Kaliteyi paylasim SURERKEN degistirir. Track ayni kalir: her peer onu
+   * odunc aldigi icin degisiklik butun izleyicilere kendiliginden gider --
+   * replaceTrack, renegotiation, secici yok.
+   *
+   * Hata YUTULMAZ, cagiran kullaniciya gosterir. Ipucu yalniz kisit tuttuktan
+   * sonra yazilir; yoksa encoder yeni ayari, yakalama eskisini yasar.
+   */
+  async ekranKalitesiUygula(k: EkranKalitesi): Promise<void> {
+    const t = this.screenVideo;
+    if (!t) return;
+    await t.applyConstraints(ekranKisitlari(k));
+    t.contentHint = icerikIpucu(k);
   }
 
   stopScreen(): void {

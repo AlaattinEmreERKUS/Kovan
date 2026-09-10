@@ -19,4 +19,18 @@ describe("buildConstraints", () => {
   it("surfaceSwitching acik: kullanici paylasimi yeniden baslatmadan yuzey degistirir", () => {
     expect(buildConstraints().surfaceSwitching).toBe("include");
   });
+
+  /** Ilk kare bile secilen kalitede gelsin: sonradan applyConstraints beklenmez. */
+  it("secilen kalitenin video kisitlarini tasir", () => {
+    expect(buildConstraints({ cozunurluk: "720p", fps: 60 }).video).toEqual({
+      width: { max: 1280 }, height: { max: 720 }, frameRate: 60,
+    });
+  });
+
+  it("kalite secimi ses ve yuzey ayarlarini degistirmez", () => {
+    const c = buildConstraints({ cozunurluk: "1080p", fps: 15 });
+    expect(c.audio).toBe(true);
+    expect(c.systemAudio).toBe("include");
+    expect(c.video).not.toHaveProperty("displaySurface");
+  });
 });

@@ -2,11 +2,12 @@ import { describe, it, expect } from "vitest";
 import { IKONLAR, IKON_ADLARI, type IkonAdi } from "./icons";
 
 describe("ikon seti", () => {
-  it("beklenen on alti ikonu icerir", () => {
+  it("beklenen on yedi ikonu icerir", () => {
     const beklenen: IkonAdi[] = [
       "mik", "mik-kapali", "kulaklik", "kulaklik-kapali",
       "kamera", "kamera-kapali", "ekran", "gorunum", "ayril",
       "uyari", "hoparlor", "buyut", "kucult", "ayar", "kanal-metin", "kanal-ses",
+      "ok-yukari",
     ];
     expect([...IKON_ADLARI].sort()).toEqual([...beklenen].sort());
   });

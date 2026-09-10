@@ -1,3 +1,5 @@
+import { EKRAN_KALITESI_VARSAYILAN, ekranKisitlari, type EkranKalitesi } from "../ekran-kalitesi";
+
 declare global {
   // TypeScript'in DOM tipleri bu iki alani her surumde tasimiyor.
   interface DisplayMediaStreamOptions {
@@ -20,10 +22,14 @@ declare global {
  *
  * Tauri paketinde native secici degistirilebilirse kendi arayuzumuz geri
  * gelebilir; o zaman constraint'ler yine buradan uretilir.
+ *
+ * Kalite ilk istekte verilir: ilk kare bile secilen boyutta gelsin.
  */
-export function buildConstraints(): DisplayMediaStreamOptions {
+export function buildConstraints(
+  k: EkranKalitesi = EKRAN_KALITESI_VARSAYILAN,
+): DisplayMediaStreamOptions {
   return {
-    video: { frameRate: 30 },
+    video: ekranKisitlari(k),
     audio: true,
     systemAudio: "include",
     surfaceSwitching: "include",

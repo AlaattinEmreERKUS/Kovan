@@ -3,13 +3,14 @@ import type { Connection } from "../connection.svelte";
 import { bosTracks, bosYerel, localFlags, voice } from "../voice.svelte";
 import { LocalMedia } from "./media";
 import { Mesh } from "./mesh";
-import { Peer, type SignalPayload, type TrackSlot } from "./peer";
+import { Peer, type EkranOzeti, type SignalPayload, type TrackSlot } from "./peer";
 import { SpeakingDetector } from "./speaking";
 import { ekranMikseri, mikrofonMikseri, type RemoteAudioMixer } from "./gain";
 import { MikrofonIsleyici } from "./mikrofon";
 import { SesTestcisi } from "./ses-testi";
 import { sesAyarlariOku, sesAyarlariYaz, type SesAyarlari } from "../ses-ayarlari";
 import { cihazSecimiOku, cihazSecimiYaz, type CihazSecimi } from "../ses-cihazlari";
+import { ekranKalitesiYaz, type EkranKalitesi } from "../ekran-kalitesi";
 import {
   cihazlariListele, tarayiciCihazDeps, tarayiciCihazOlaylari, type CihazDeps,
 } from "./cihazlar";
@@ -546,7 +547,7 @@ export class VoiceSession {
     let video: MediaStreamTrack;
     let audio: MediaStreamTrack | null;
     try {
-      ({ video, audio } = await this.media.startScreen());
+      ({ video, audio } = await this.media.startScreen(this.ekranKalitesi()));
     } catch (e) {
       // NotAllowedError = kullanici native secicide vazgecti. Hata
       // GOSTERILMEZ; vazgecmek bir ariza degil (spec 8.1 adim 3).
@@ -581,7 +582,7 @@ export class VoiceSession {
     let video: MediaStreamTrack;
     let audio: MediaStreamTrack | null;
     try {
-      ({ video, audio } = await this.media.startScreen());
+      ({ video, audio } = await this.media.startScreen(this.ekranKalitesi()));
     } catch (e) {
       if ((e as DOMException)?.name !== "NotAllowedError") {
         voice.error = "Ekran kaynağı değiştirilemedi.";
@@ -597,6 +598,34 @@ export class VoiceSession {
     // Yeni secimde sistem sesi kutusu isaretlenmemis olabilir.
     voice.screenAudio = audio !== null;
     this.publish();
+  }
+
+  /**
+   * Ekran kalitesi tercihi. Paylasim suruyorsa canli uygulanir; track ayni
+   * kalir, izleyici kopma gormez ve sunucuya hicbir sey gitmez.
+   *
+   * Store ANCAK kisit tuttuktan sonra yazilir: menu o an gercekten gecerli
+   * olani gostermeli. Patlarsa yakalama eski ayarla surer.
+   */
+  async setEkranKalitesi(k: EkranKalitesi): Promise<void> {
+    try {
+      await this.media.ekranKalitesiUygula(k);
+    } catch {
+      voice.error = "Ekran kalitesi değiştirilemedi.";
+      return;
+    }
+    voice.ekranKalitesi = k;
+    ekranKalitesiYaz(k);
+  }
+
+  /** Teshis: her izleyiciye GERCEKTE giden ekran akisi (`kovanEkran()`). */
+  async ekranIstatistikleri(): Promise<Array<{ userId: string; giden: EkranOzeti | null }>> {
+    return this.mesh ? this.mesh.ekranIstatistikleri() : [];
+  }
+
+  /** Store proxy'si LocalMedia'ya sizmasin: duz kopya verilir. */
+  private ekranKalitesi(): EkranKalitesi {
+    return { ...voice.ekranKalitesi };
   }
 
   /**

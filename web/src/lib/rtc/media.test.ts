@@ -209,6 +209,71 @@ describe("LocalMedia ekran kaynagi degistirme", () => {
   });
 });
 
+describe("LocalMedia ekran kalitesi", () => {
+  function kaliteKur() {
+    const video = sahteTrack("video");
+    const uygula = vi.fn(async (_c: MediaTrackConstraints) => {});
+    (video as unknown as { applyConstraints: unknown }).applyConstraints = uygula;
+    const deps: MediaDeps = {
+      getUserMedia: vi.fn(),
+      getDisplayMedia: vi.fn(async () => sahteStream(video)),
+    };
+    return { media: new LocalMedia(deps), deps, video, uygula };
+  }
+
+  it("startScreen secilen kaliteyi seciciye iletir", async () => {
+    const { media, deps } = kaliteKur();
+    await media.startScreen({ cozunurluk: "720p", fps: 15 });
+    const c = (deps.getDisplayMedia as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(c.video).toEqual({ width: { max: 1280 }, height: { max: 720 }, frameRate: 15 });
+  });
+
+  it("startScreen fps'e gore contentHint yazar", async () => {
+    const { media, video } = kaliteKur();
+    await media.startScreen({ cozunurluk: "kaynak", fps: 60 });
+    expect(video.contentHint).toBe("motion");
+  });
+
+  it("kalite verilmezse bugunku davranis: kaynak, 30 fps, detail", async () => {
+    const { media, deps, video } = kaliteKur();
+    await media.startScreen();
+    const c = (deps.getDisplayMedia as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(c.video).toEqual({ frameRate: 30 });
+    expect(video.contentHint).toBe("detail");
+  });
+
+  /** Paylasim SURERKEN: secici yeniden acilmaz, track degismez. */
+  it("ekranKalitesiUygula canli track'e kisit ve ipucu uygular", async () => {
+    const { media, deps, video, uygula } = kaliteKur();
+    await media.startScreen();
+    await media.ekranKalitesiUygula({ cozunurluk: "1080p", fps: 60 });
+    expect(uygula).toHaveBeenCalledWith({
+      width: { max: 1920 }, height: { max: 1080 }, frameRate: 60,
+    });
+    expect(video.contentHint).toBe("motion");
+    expect(deps.getDisplayMedia).toHaveBeenCalledTimes(1);
+    expect(media.screenVideo).toBe(video);
+  });
+
+  it("paylasim yokken ekranKalitesiUygula hicbir sey yapmaz", async () => {
+    const { media } = kaliteKur();
+    await expect(media.ekranKalitesiUygula({ cozunurluk: "720p", fps: 15 }))
+      .resolves.toBeUndefined();
+  });
+
+  /**
+   * Hata YUTULMAZ: cagiran kullaniciya gosterir. Ipucu da degismez, yoksa
+   * encoder yeni ayari, yakalama eskisini yasar ve ikisi celisir.
+   */
+  it("applyConstraints patlarsa hata yukari cikar, ipucu eski kalir", async () => {
+    const { media, video, uygula } = kaliteKur();
+    await media.startScreen({ cozunurluk: "kaynak", fps: 30 });
+    uygula.mockRejectedValueOnce(new DOMException("olmaz", "OverconstrainedError"));
+    await expect(media.ekranKalitesiUygula({ cozunurluk: "720p", fps: 60 })).rejects.toThrow();
+    expect(video.contentHint).toBe("detail");
+  });
+});
+
 describe("LocalMedia cihaz secimi", () => {
   it("startMic verilen cihazi exact olarak ister", async () => {
     const { media, deps } = kur();
