@@ -66,3 +66,33 @@ test("bagliyken kayit olan uyenin adi hemen gorunur", async ({ browser }) => {
   await ctxA.close();
   await ctxB.close();
 });
+
+test("mesajdaki link tiklanabilir, javascript semasi degil", async ({ browser }) => {
+  const damga = Date.now();
+  await davetUret(`E9-${damga}`);
+  const ctx = await browser.newContext();
+  const a = await ctx.newPage();
+  await kayitOl(a, `E9-${damga}`, `Linkci${damga}`);
+
+  const mesaj = `bak https://example.com/${damga}. ve javascript:alert(${damga})`;
+  await a.getByLabel("Mesaj yaz").fill(mesaj);
+  await a.getByLabel("Mesaj yaz").press("Enter");
+
+  // Yerel veritabani kosular arasi kaliyor: dogrulama MESAJA baglanir.
+  const satir = a.locator(".mesaj", { hasText: `example.com/${damga}` });
+  const baglanti = satir.getByRole("link");
+  await expect(baglanti).toHaveCount(1);
+  await expect(baglanti).toHaveText(`https://example.com/${damga}`);
+  await expect(baglanti).toHaveAttribute("href", `https://example.com/${damga}`);
+  await expect(baglanti).toHaveAttribute("target", "_blank");
+  await expect(baglanti).toHaveAttribute("rel", "noopener noreferrer");
+  // Metnin geri kalani aynen duruyor: sondaki nokta ve javascript metni.
+  await expect(satir.locator("p")).toHaveText(mesaj);
+
+  // Tiklayinca yeni sekme acilir, Kovan sekmesi yerinde kalir.
+  const [yeni] = await Promise.all([ctx.waitForEvent("page"), baglanti.click()]);
+  expect(yeni).not.toBe(a);
+  await expect(a.getByLabel("Mesaj yaz")).toBeVisible();
+
+  await ctx.close();
+});

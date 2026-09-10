@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { MessageGroupItem } from "$lib/gruplama";
   import { store } from "$lib/store.svelte";
+  import { parcala } from "$lib/linkler";
   import ReactionBar from "./ReactionBar.svelte";
 
   let { grup, onToggleReaction }: {
@@ -24,7 +25,11 @@
     </header>
     {#each grup.messages as m (m.id)}
       <div class="mesaj">
-        <p>{m.content}</p>
+        <!--
+          Parcalar text node ve <a> olarak basilir; {@html} YOK, icerik hicbir
+          kosulda HTML sayilmaz. Tek satirda tutulur: pre-wrap bosluk basar.
+        -->
+        <p>{#each parcala(m.content) as p, i (i)}{#if p.tur === "link"}<a href={p.href} target="_blank" rel="noopener noreferrer">{p.metin}</a>{:else}{p.metin}{/if}{/each}</p>
         <ReactionBar messageId={m.id} onToggle={(e) => onToggleReaction(m.id, e)} />
       </div>
     {/each}
@@ -43,4 +48,6 @@
   .ad { font-weight: 600; }
   .saat { font-family: var(--yazi-mono); font-size: 11px; color: var(--metin-3); }
   .mesaj p { margin: 2px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .mesaj a { color: var(--bal-sicak); text-decoration: none; }
+  .mesaj a:hover { text-decoration: underline; }
 </style>
