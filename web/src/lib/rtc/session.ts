@@ -11,6 +11,7 @@ import { SesTestcisi } from "./ses-testi";
 import { sesAyarlariOku, sesAyarlariYaz, type SesAyarlari } from "../ses-ayarlari";
 import { cihazSecimiOku, cihazSecimiYaz, type CihazSecimi } from "../ses-cihazlari";
 import { ekranKalitesiYaz, type EkranKalitesi } from "../ekran-kalitesi";
+import { kopmaKaydet } from "../kopma-kaydi";
 import {
   cihazlariListele, tarayiciCihazDeps, tarayiciCihazOlaylari, type CihazDeps,
 } from "./cihazlar";
@@ -691,7 +692,11 @@ export class VoiceSession {
       pc,
       sendSignal: (data) => this.o.conn.send({ t: "signal", target: userId, data }),
       onTrack: (slot, track) => this.onRemoteTrack(userId, slot, track),
-      onStateChange: (durum) => voice.connection.set(userId, durum),
+      onStateChange: (durum) => {
+        voice.connection.set(userId, durum);
+        // Socket ayaktayken WebRTC yolunun bozulmasi ayri bir kopma turudur.
+        if (durum !== "new" && durum !== "connecting") kopmaKaydet({ tur: "peer", userId, durum });
+      },
     });
 
     // Baglanti kurulur kurulmaz yerel track'ler yerine oturur. replaceTrack

@@ -10,6 +10,8 @@ import { MAX_SIGNAL, VOICE_CAP, sanitizeVoiceFlags, voiceFull, voiceMembers } fr
 import { iceServers } from "./turn";
 import { kullaniciListesi, kullanicilariSil } from "./users";
 import type { ClientEvent, ServerEvent, User } from "@shared/protocol";
+// Tip disi deger: @shared alias yalniz tipte cozulur, runtime icin goreli yol.
+import { PING, PONG } from "../../shared/protocol";
 
 interface UserRow extends Record<string, SqlStorageValue> {
   id: string;
@@ -25,6 +27,8 @@ export class KovanServer implements DurableObject {
   constructor(private ctx: DurableObjectState, private env: Env) {
     this.sql = ctx.storage.sql;
     ensureSchema(this.sql);
+    // Cevabi runtime verir: DO uyanmaz, wall-clock yazilmaz.
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(PING, PONG));
   }
 
   async fetch(request: Request): Promise<Response> {

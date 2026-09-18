@@ -1,6 +1,7 @@
 import { env, runInDurableObject } from "cloudflare:test";
 import { writeState } from "../src/sockets";
 import type { ServerEvent } from "@shared/protocol";
+import { PONG } from "../../shared/protocol";
 
 const BASE = "https://kovan.test";
 
@@ -66,6 +67,7 @@ export async function baglan(token: string): Promise<WebSocket> {
   const kuyruk: ServerEvent[] = [];
   kuyruklar.set(ws, kuyruk);
   ws.addEventListener("message", (e) => {
+    if (e.data === PONG) return; // JSON degil, canli tutma cevabi
     kuyruk.push(JSON.parse(e.data as string) as ServerEvent);
   });
   return ws;

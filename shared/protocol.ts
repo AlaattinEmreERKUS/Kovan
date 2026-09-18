@@ -28,6 +28,15 @@ export interface VoiceMember {
   screenAudio: boolean;
 }
 
+/**
+ * Canli tutma. JSON DEGIL, duz metin: sunucuda `setWebSocketAutoResponse`
+ * bu dizgiyi birebir eslestirip DO'yu uyandirmadan cevaplar. Seste socket
+ * dakikalarca sessiz kalir; ara cihazlar sessiz baglantiyi 1006 ile kesiyordu
+ * (2026-09-19 kopma kaydi).
+ */
+export const PING = "ping";
+export const PONG = "pong";
+
 export type ClientEvent =
   | { t: "msg.send"; content: string; localId: string }
   | { t: "reaction.toggle"; messageId: number; emoji: string }

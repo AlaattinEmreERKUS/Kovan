@@ -1,11 +1,18 @@
-import type { ClientEvent, ServerEvent, VoiceMember } from "@shared/protocol";
+import { PING, PONG, type ClientEvent, type ServerEvent, type VoiceMember } from "@shared/protocol";
 import { applyReactions, lastMessageId, reactionKey, store } from "./store.svelte";
 import { resetVoice, voice } from "./voice.svelte";
+import { kopmaKaydet } from "./kopma-kaydi";
 
 const TYPING_ARALIK = 3000;
 const BACKOFF_BASLANGIC = 1000;
 const BACKOFF_TAVAN = 30000;
 const TYPING_SONME = 4000;
+/**
+ * Canli tutma araligi. Seste socket dakikalarca sessiz kaliyor ve 1006 ile
+ * kesiliyordu (2026-09-19 kaydi: 6 kopma, hepsi 1006, ag ve sekme ayakta).
+ * Sunucu cevabi auto-response ile verir, DO uyanmaz.
+ */
+export const PING_ARALIK = 30_000;
 
 export class Connection {
   private ws: WebSocket | null = null;
@@ -37,9 +44,19 @@ export class Connection {
     store.durum = "baglaniyor";
     const ws = new WebSocket(`${this.url}?token=${encodeURIComponent(this.token)}`);
     this.ws = ws;
+    let acildi = 0;
+    // Son gelen cerceve (pong dahil). Kopmada "ne kadar sessizdi" sorusunu
+    // cevaplar: ara cihaz zaman asimi acik kalma suresini degil sessizligi sayar.
+    let sonMesaj = 0;
+    let ping: ReturnType<typeof setInterval> | undefined;
 
     ws.onopen = () => {
+      acildi = Date.now();
+      sonMesaj = acildi;
       store.durum = "acik";
+      ping = setInterval(() => {
+        try { ws.send(PING); } catch { /* kapanmakta; onclose halleder */ }
+      }, PING_ARALIK);
       this.backoff = BACKOFF_BASLANGIC;
       // İlk açılışta 0; yeniden bağlanmada kaçırılan mesajlar istenir.
       const son = lastMessageId();
@@ -48,9 +65,31 @@ export class Connection {
       this.onReconnect?.();
     };
 
-    ws.onmessage = (e: MessageEvent) => this.handle(JSON.parse(e.data as string) as ServerEvent);
+    ws.onmessage = (e: MessageEvent) => {
+      sonMesaj = Date.now();
+      if (e.data === PONG) return;
+      this.handle(JSON.parse(e.data as string) as ServerEvent);
+    };
 
-    ws.onclose = () => {
+    ws.onclose = (e?: CloseEvent) => {
+      clearInterval(ping);
+      // Bilincli kapanis (close()) kopma degildir, kayda girmez. Teshis kaydi
+      // ne olursa olsun asagidaki yeniden baglanmayi ENGELLEYEMEZ.
+      if (!this.kapandi) {
+        try {
+          kopmaKaydet({
+            tur: "ws",
+            kod: e?.code ?? 0,
+            sebep: e?.reason ?? "",
+            temiz: e?.wasClean ?? false,
+            // Hic acilamadiysa 0: yeniden baglanma denemesi basarisiz oldu.
+            acikKaldiSn: acildi ? Math.round((Date.now() - acildi) / 1000) : 0,
+            sessizSn: sonMesaj ? Math.round((Date.now() - sonMesaj) / 1000) : undefined,
+            cevrimici: typeof navigator === "undefined" ? undefined : navigator.onLine,
+            gorunurluk: typeof document === "undefined" ? undefined : document.visibilityState,
+          });
+        } catch { /* teshis, akisi durdurmaz */ }
+      }
       // SIRA onemli: once oturum karar verir (store'dan katilim durumunu
       // okur), sonra store temizlenir. Ters sirada oturum "zaten cikmis"
       // sanip baglantilari acik birakiyordu.

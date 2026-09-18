@@ -5,6 +5,7 @@
   import { Connection } from "$lib/connection.svelte";
   import { store } from "$lib/store.svelte";
   import { voice } from "$lib/voice.svelte";
+  import { kopmalariOku } from "$lib/kopma-kaydi";
   import { VoiceSession } from "$lib/rtc/session";
   import { isTauri, kopru, kisayolDinle, kisayolUygula } from "$lib/masaustu";
   import { kisayollariOku, type KayitSonucu } from "$lib/kisayollar";
@@ -167,6 +168,8 @@
       // Secilen kalite TAVANDIR; gercekte gideni `kovanEkran()` gosterir.
       ekranKalitesi: voice.ekranKalitesi,
     });
+    // Kopma teshisi: son 50 socket/peer kopmasi, saat ve kapanma koduyla.
+    (window as unknown as { kovanKopmalar?: unknown }).kovanKopmalar = () => kopmalariOku();
     // getStats asenkron; kovanDurum() senkron kalsin diye AYRI kanca.
     // Paylasan kisi konsola `await kovanEkran()` yazar: her izleyiciye giden
     // cozunurluk, fps ve encoder'in neden secimin altinda kaldigi (sinir).

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { Connection } from "./connection.svelte";
+import { Connection, PING_ARALIK } from "./connection.svelte";
+import { kopmalariOku } from "./kopma-kaydi";
+import { PING, PONG } from "@shared/protocol";
 import { store } from "./store.svelte";
 
 class SahteSoket {
@@ -150,6 +152,53 @@ describe("Connection", () => {
     ws.onmessage!({ data: JSON.stringify({ t: "member.gone", userIds: ["u9"] }) });
     expect(store.members.map((m) => m.id)).toEqual(["u1"]);
     expect(store.online.has("u9")).toBe(false);
+    c.close();
+  });
+
+  it("acikken 30 sn'de bir duz metin ping gonderir", () => {
+    const c = new Connection("wss://x/ws", "tok");
+    const ws = SahteSoket.sonuncu;
+    vi.advanceTimersByTime(PING_ARALIK * 2);
+    expect(ws.gonderilen).not.toContain(PING); // acilmadan ping yok
+
+    ws.onopen!();
+    vi.advanceTimersByTime(PING_ARALIK - 1);
+    expect(ws.gonderilen.filter((s) => s === PING)).toHaveLength(0);
+    vi.advanceTimersByTime(1);
+    expect(ws.gonderilen.filter((s) => s === PING)).toHaveLength(1);
+    vi.advanceTimersByTime(PING_ARALIK);
+    expect(ws.gonderilen.filter((s) => s === PING)).toHaveLength(2);
+    c.close();
+  });
+
+  it("pong JSON olarak islenmez", () => {
+    const c = new Connection("wss://x/ws", "tok");
+    const ws = SahteSoket.sonuncu;
+    ws.onopen!();
+    expect(() => ws.onmessage!({ data: PONG })).not.toThrow();
+    c.close();
+  });
+
+  it("kopunca ping durur, kayit sessizlik suresini tutar", () => {
+    const depo = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => depo.get(k) ?? null,
+      setItem: (k: string, v: string) => void depo.set(k, v),
+    });
+    const c = new Connection("wss://x/ws", "tok");
+    const ws = SahteSoket.sonuncu;
+    ws.onopen!();
+    vi.advanceTimersByTime(10_000);
+    ws.onmessage!({ data: PONG });
+    vi.advanceTimersByTime(7_000);
+    ws.close();
+
+    const [kayit] = kopmalariOku();
+    expect(kayit).toMatchObject({ tur: "ws", acikKaldiSn: 17, sessizSn: 7 });
+
+    const oncekiPing = ws.gonderilen.filter((s) => s === PING).length;
+    vi.advanceTimersByTime(PING_ARALIK * 3);
+    expect(ws.gonderilen.filter((s) => s === PING)).toHaveLength(oncekiPing);
     c.close();
   });
 
