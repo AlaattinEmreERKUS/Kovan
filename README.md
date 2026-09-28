@@ -116,7 +116,7 @@ olmadan test edilebiliyor.
 
 ```bash
 cd server
-npx wrangler secret put ADMIN_KEY            # yönetici uçları için
+npx wrangler secret put ADMIN_KEY
 npx wrangler secret put TURN_KEY_ID          # Cloudflare Realtime TURN
 npx wrangler secret put TURN_KEY_API_TOKEN
 npm run deploy
@@ -134,14 +134,6 @@ npx wrangler pages deploy .svelte-kit/cloudflare --project-name kovan-web --bran
 > önizleme adresine gider.
 
 Üretimde `PUBLIC_WS_URL` ve `PUBLIC_API_URL` Worker'ın adresini göstermeli.
-
-**Yönetici uçları** (`x-admin: <ADMIN_KEY>` başlığıyla):
-
-| Uç | İş |
-| --- | --- |
-| `POST /api/admin/invite` | Davet kodu ekler, gövde `{"code": "..."}` |
-| `GET /api/admin/users` | Üyeleri listeler |
-| `POST /api/admin/users/delete` | Üye siler, gövde `{"usernames": [...]}`. Geri alınamaz, mesajları da gider |
 
 ## Maliyet
 
