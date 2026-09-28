@@ -58,8 +58,6 @@ tek link yetiyor. Bedeli: `.msi` depoya giriyor (~5-10 MB) ve sürüm geçmişi
 tutulmuyor — yeni sürüm eskisinin üzerine yazılıyor. Sürüm sayısı artarsa
 GitHub Releases'e taşımak gerekir.
 
-Adımlar `docs/deploy.md` içinde.
-
 ### SmartScreen uyarısı — arkadaşlara söylenecek
 
 `.msi` **imzasız**. Kod imzalama sertifikası yıllık ücretli, dört kişi için
@@ -73,8 +71,7 @@ Bu uyarı "virüs bulundu" demek değil; "bu yayıncıyı tanımıyorum" demek.
 
 ## İkon
 
-Kovan'ın kendi ikonu. Kaynak SVG'ler `ikon/` altında, seçim
-`docs/ikon-secimi-uygulama.html` üzerinden yapıldı. Yeniden üretmek için:
+Kovan'ın kendi ikonu. Kaynak SVG'ler `ikon/` altında. Yeniden üretmek için:
 
 ```bash
 cd desktop && npx tauri icon ikon/<seçilen>.png

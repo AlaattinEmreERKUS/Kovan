@@ -1,7 +1,7 @@
 /**
  * Dolu (filled) stil inline SVG seti. 24x24 grid, renk currentColor.
  * Govdeler dolu, yalniz yaylar konturlu. Dis bagimlilik ya da ikon
- * dosyasi yok; secim gerekcesi ve alternatifler docs/ikon-secimi.html.
+ * dosyasi yok.
  */
 export const IKONLAR = {
   "mik":
